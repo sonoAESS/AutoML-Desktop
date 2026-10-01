@@ -13,3 +13,5 @@ class AppState:
     pipeline: Optional[Pipeline] = None
     trained_model = None
     metrics: dict = field(default_factory=dict)
+    _cv_results: dict = field(default_factory = dict)
+    _test_data: tuple | None=None

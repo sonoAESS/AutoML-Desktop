@@ -183,13 +183,16 @@ un traceback llegue al usuario final.**
 
 ### 5.3 Bloqueo de la UI
 
-**Regla**: nunca ejecutes entrenamiento o preprocesamiento pesado en el
-hilo principal. Si el dataset es grande o añades búsqueda de
-hiperparámetros, muévelo a un `QThread` o `QThreadPool` y comunica el
-resultado por señales.
+**Regla**: nunca ejecutes entrenamiento, preprocesamiento pesado ni
+búsqueda de hiperparámetros en el hilo principal.
 
-En el estado actual del proyecto `train_model()` se ejecuta en el hilo
-principal; si añades `GridSearchCV`, esta regla pasa a ser obligatoria.
+- `train_model()` puede ejecutarse síncronamente si el dataset es pequeño,
+  pero cualquier llamada a `tune_model()` **debe** hacerse desde
+  `ui/workers.WorkerThread`.
+- Los workers viven en `ui/workers.py`, extienden `QObject` y se comunican
+  con la UI solo por señales (`finished`, `failed`, `progress`).
+- No importes `core` directamente desde dentro de un worker para ejecutar
+  lógica: el worker solo orquesta, la ciencia vive en `core/`.
 
 ---
 

@@ -1,0 +1,6 @@
+entorno/
+example/
+build/
+dist/
+*.spec
+__pycache__

@@ -1,11 +1,23 @@
 # ui/data_tab.py
+from pathlib import Path
+
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QTableWidget, QTableWidgetItem, QMessageBox, QComboBox, QGroupBox,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
     QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
+
 from core import data_loader, profiling
+from ui import file_dialogs
 
 TASK_LABELS = {
     profiling.CLASSIFICATION: "clasificación",
@@ -29,8 +41,8 @@ class DataTab(QWidget):
         layout = QVBoxLayout(self)
 
         top = QHBoxLayout()
-        self.btn_load = QPushButton("Cargar CSV…")
-        self.btn_load.clicked.connect(self.load_csv)
+        self.btn_load = QPushButton("Cargar datos…")
+        self.btn_load.clicked.connect(self.load_data)
         self.lbl_info = QLabel("Ningún archivo cargado")
         top.addWidget(self.btn_load)
         top.addWidget(self.lbl_info)
@@ -46,8 +58,14 @@ class DataTab(QWidget):
         self.table_perfil = QTableWidget()
         self.table_perfil.setColumnCount(6)
         self.table_perfil.setHorizontalHeaderLabels(
-            ["Columna", "Tipo detectado", "Dtype real", "Únicos",
-             "% nulos", "Tarea sugerida"]
+            [
+                "Columna",
+                "Tipo detectado",
+                "Dtype real",
+                "Únicos",
+                "% nulos",
+                "Tarea sugerida",
+            ]
         )
         self.table_perfil.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Stretch
@@ -75,16 +93,19 @@ class DataTab(QWidget):
         layout.addWidget(self.table)
 
     # ------------------------------------------------------------------
-    def load_csv(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar CSV", "", "CSV (*.csv *.txt *.tsv)"
-        )
+    def load_data(self):
+        """Abre un fichero CSV/Excel/ODS y lo deja como `raw_df`."""
+        path = file_dialogs.choose_table_file(self, "Seleccionar fichero de datos")
         if not path:
             return
         try:
-            df = data_loader.load_csv(path)
+            hojas = data_loader.list_sheets(path)
+            hoja = file_dialogs.choose_sheet(self, hojas)
+            if len(hojas) > 1 and hoja is None:
+                return
+            df = data_loader.load_table(path, sheet=hoja if hoja else 0)
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            QMessageBox.critical(self, "Error al cargar los datos", str(e))
             return
 
         self.state.reset_data()
@@ -98,8 +119,11 @@ class DataTab(QWidget):
         self._show_summary()
 
         info = data_loader.summarize(df)
+        origen = Path(path).name
+        if len(hojas) > 1:
+            origen = f"{origen} · hoja «{hoja}»"
         self.lbl_info.setText(
-            f"{info['n_rows']} filas · {info['n_cols']} columnas · "
+            f"{origen} · {info['n_rows']} filas · {info['n_cols']} columnas · "
             f"{info['missing']} valores nulos"
         )
         self.data_loaded.emit()
@@ -136,23 +160,20 @@ class DataTab(QWidget):
 
         for fila, profile in enumerate(self.state.profiles):
             self.table_perfil.insertRow(fila)
-            self.table_perfil.setItem(
-                fila, 0, QTableWidgetItem(profile.name)
-            )
+            self.table_perfil.setItem(fila, 0, QTableWidgetItem(profile.name))
 
             combo = QComboBox()
             for tipo in profiling.SEMANTIC_TYPES:
                 combo.addItem(profiling.SEMANTIC_LABELS[tipo], tipo)
-            elegido = self.state.column_types.get(
-                profile.name, profile.semantic_type
-            )
+            elegido = self.state.column_types.get(profile.name, profile.semantic_type)
             indice = combo.findData(elegido)
             combo.setCurrentIndex(max(indice, 0))
             self.table_perfil.setCellWidget(fila, 1, combo)
             self._type_widgets[fila] = (profile.name, combo)
             combo.currentIndexChanged.connect(
-                lambda _index, nombre=profile.name, box=combo:
-                self._on_type_selected(nombre, box)
+                lambda _index, nombre=profile.name, box=combo: self._on_type_selected(
+                    nombre, box
+                )
             )
 
             self.table_perfil.setItem(fila, 2, QTableWidgetItem(profile.dtype))
@@ -161,7 +182,8 @@ class DataTab(QWidget):
                 fila, 4, QTableWidgetItem(f"{profile.missing_pct:.0%}")
             )
             self.table_perfil.setItem(
-                fila, 5,
+                fila,
+                5,
                 QTableWidgetItem(TASK_LABELS.get(profile.target_task, "—")),
             )
             if profile.warnings:

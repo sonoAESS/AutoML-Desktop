@@ -36,6 +36,12 @@ class AppState:
     balancing: Optional[str] = None
     class_distribution: Optional[dict] = None
 
+    # --- Comparativa de modelos ---
+    #: Último `core.comparison.ModelComparison`, o `None`.
+    comparison = None
+    #: Configuración con la que se hizo, para avisar si queda desfasada.
+    comparison_key: Optional[tuple] = None
+
     # --- Selección de atributos ---
     #: Método elegido (`"anova"`, `"chi2"`, …) o `None` si no se selecciona.
     selection_method: Optional[str] = None
@@ -68,6 +74,8 @@ class AppState:
         self.class_distribution = None
         self.selection_method = None
         self.selection_criteria = None
+        self.comparison = None
+        self.comparison_key = None
         self.bundle_path = None
 
     def reset_model(self):
@@ -78,4 +86,6 @@ class AppState:
         self.metrics = {}
         self._cv_results = {}
         self._test_data = None
+        self.comparison = None
+        self.comparison_key = None
         self.bundle_path = None

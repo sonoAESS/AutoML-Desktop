@@ -1,7 +1,7 @@
 # ui/workers.py  (archivo nuevo)
 from PySide6.QtCore import QObject, QThread, Signal
 
-from core import model_trainer
+from core import comparison, model_trainer
 
 
 class TuneWorker(QObject):
@@ -129,5 +129,62 @@ class SelectionWorker(QObject):
         try:
             tabla = model_trainer.analyze_selection(**self._kwargs)
             self.finished.emit(tabla)
+        except Exception as e:  # noqa: BLE001 - el mensaje va a la interfaz
+            self.failed.emit(str(e))
+
+
+class ComparisonWorker(QObject):
+    """Ejecuta la comparativa de modelos en un hilo aparte.
+
+    Ajustar `modelos × bloques` pipelines es de largo por definición, así que va
+    siempre en segundo plano. Solo orquesta: el análisis vive en
+    `core.comparison.compare_models`.
+    """
+
+    finished = Signal(object)  # ModelComparison
+    failed = Signal(str)
+    progress = Signal(str, int, int)  # etapa, hecho, total
+
+    def __init__(
+        self,
+        df,
+        target,
+        model_names,
+        task_type,
+        metric,
+        casts=None,
+        normalizations=None,
+        selection=None,
+        balancing=None,
+        n_splits=5,
+        n_repeats=3,
+        random_state=42,
+    ):
+        super().__init__()
+        self._kwargs = dict(
+            df=df,
+            target=target,
+            model_names=model_names,
+            task_type=task_type,
+            metric=metric,
+            casts=casts,
+            normalizations=normalizations,
+            selection=selection,
+            balancing=balancing,
+            n_splits=n_splits,
+            n_repeats=n_repeats,
+            random_state=random_state,
+        )
+
+    def _reportar(self, hecho, total):
+        self.progress.emit(f"Comparando modelos: {hecho}/{total}", hecho, total)
+
+    def run(self):
+        try:
+            self.progress.emit("Preparando los folds…", 0, 0)
+            resultado = comparison.compare_models(
+                progress=self._reportar, **self._kwargs
+            )
+            self.finished.emit(resultado)
         except Exception as e:  # noqa: BLE001 - el mensaje va a la interfaz
             self.failed.emit(str(e))

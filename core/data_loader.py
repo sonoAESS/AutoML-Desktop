@@ -1,6 +1,8 @@
 # core/data_loader.py
 import pandas as pd
 
+from core.preprocessor import categorical_columns, numeric_columns
+
 def load_csv(path: str) -> pd.DataFrame:
     """Carga un CSV detectando automáticamente separador y encoding."""
     for sep in [",", ";", "\t", "|"]:
@@ -19,8 +21,6 @@ def summarize(df: pd.DataFrame) -> dict:
         "n_cols": df.shape[1],
         "missing": df.isna().sum().sum(),
         "dtypes": df.dtypes.astype(str).to_dict(),
-        "numeric_cols": df.select_dtypes("number").columns.tolist(),
-        "categorical_cols": df.select_dtypes(
-            ["object", "category", "bool"]
-        ).columns.tolist(),
+        "numeric_cols": numeric_columns(df),
+        "categorical_cols": categorical_columns(df),
     }

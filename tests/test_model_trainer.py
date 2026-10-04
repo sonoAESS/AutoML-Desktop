@@ -81,3 +81,47 @@ def test_resolve_roc_auc():
     assert model_trainer._resolve_roc_auc(
         model_trainer.REGRESSORS["Regresión Lineal"], df["y"]
     ) == "accuracy"
+
+
+def test_transform_dataset_aplica_tipos_y_normalizacion():
+    df = pd.DataFrame({
+        "edad": ["20", "30", "40", "50", "60", "70", "80", "90", "100", "110"],
+        "y": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    })
+    out = model_trainer.transform_dataset(
+        df,
+        casts={"edad": "numerico"},
+        normalizations={"edad": "minmax"},
+    )
+    assert out["edad"].dtype.kind in "if"
+    assert out["edad"].min() == 0.0
+    assert out["edad"].max() == 1.0
+
+
+def test_el_pipeline_incluye_los_pasos_de_transformacion():
+    df = pd.DataFrame({
+        "edad": ["20", "30", "40", "50", "60", "70", "80", "90", "100", "110"],
+        "y": [0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+    })
+    pipe, _, _ = model_trainer.train_model(
+        df, target="y", model_name="Regresión Logística",
+        task_type="classification",
+        casts={"edad": "numerico"},
+        normalizations={"edad": "standard"},
+    )
+    pasos = list(pipe.named_steps)
+    assert pasos[:3] == ["typer", "normalizer", "preprocessor"]
+
+
+def test_el_pipeline_predice_sobre_datos_crudos():
+    df = pd.DataFrame({
+        "ciudad": ["a", "b", "a", "b"] * 10,
+        "importe": [10.0, 20.0, 30.0, 40.0] * 10,
+        "y": [0, 1, 0, 1] * 10,
+    })
+    pipe, _, _ = model_trainer.train_model(
+        df, target="y", model_name="Random Forest", task_type="classification",
+        casts={"importe": "numerico"}, normalizations={"importe": "minmax"},
+    )
+    nuevos = pd.DataFrame({"importe": ["999999"], "ciudad": ["a"]})
+    assert len(pipe.predict(nuevos)) == 1

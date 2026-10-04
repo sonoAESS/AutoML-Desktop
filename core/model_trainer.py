@@ -19,6 +19,10 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from core import model_specs
 from core.model_specs import CLASSIFICATION, REGRESSION
+from core.preprocessor import (
+    ColumnNormalizer, ColumnTyper, cast_columns, categorical_columns,
+    normalization_plan, normalize_columns, numeric_columns,
+)
 
 #: Modelos por tarea (instancias de referência, se mantienen por compatibilidad).
 CLASSIFIERS = {
@@ -52,8 +56,8 @@ def compatible_models(task_type, profiles, target=None, n_rows=None):
 
 
 def build_preprocessor(X):
-    num_cols = X.select_dtypes("number").columns.tolist()
-    cat_cols = X.select_dtypes(["object", "category", "bool"]).columns.tolist()
+    num_cols = numeric_columns(X)
+    cat_cols = categorical_columns(X)
 
     num_pipe = Pipeline([
         ("imputer", SimpleImputer(strategy="median")),
@@ -69,17 +73,56 @@ def build_preprocessor(X):
     ])
 
 
-def build_pipeline(df, model_name, task_type, target):
-    """Construye el pipeline (preprocesamiento + modelo) sin entrenarlo."""
+def build_pipeline(df, model_name, task_type, target, casts=None, normalizations=None):
+    """Construye el pipeline (tipos + normalización + preprocesado + modelo).
+
+    Los pasos `ColumnTyper` y `ColumnNormalizer` son los mismos que se aplican
+    al dataset para mostrarlo y exportarlo, de modo que un modelo guardado
+    reproduce exactamente la transformación sobre datos nuevos.
+    """
     X = df.drop(columns=[target])
-    return Pipeline([
-        ("preprocessor", build_preprocessor(X)),
-        ("model", model_specs.build_estimator(model_name, task_type)),
-    ])
+    steps = []
+    if casts:
+        steps.append(("typer", ColumnTyper(casts)))
+    if normalizations:
+        steps.append(("normalizer", ColumnNormalizer(normalizations)))
+    steps.append(("preprocessor", build_preprocessor(X)))
+    steps.append(("model", model_specs.build_estimator(model_name, task_type)))
+    return Pipeline(steps)
 
 
-def train_model(df, target, model_name, task_type, test_size=0.2, random_state=42):
+def transform_dataset(df, casts=None, normalizations=None):
+    """Aplica al dataset los mismos pasos previos del pipeline.
+
+    Sirve para obtener el dataset transformado que se muestra y se guarda
+    junto al modelo.
+    """
+    out = df
+    if casts:
+        out = cast_columns(out, casts)
+    for method, columns in normalization_plan(normalizations).items():
+        out = normalize_columns(out, columns, method)
+    return out
+
+
+def train_model(
+    df,
+    target,
+    model_name,
+    task_type,
+    test_size=0.2,
+    random_state=42,
+    casts=None,
+    normalizations=None,
+):
     """Entrena un modelo sin búsqueda de hiperparámetros.
+
+    Parámetros
+    ----------
+    casts : dict | None
+        Tipos forzados por columna, `{columna: tipo}`.
+    normalizations : dict | None
+        Normalización por columna, `{columna: método}`.
 
     Devuelve
     --------
@@ -98,7 +141,9 @@ def train_model(df, target, model_name, task_type, test_size=0.2, random_state=4
         stratify=y if task_type == CLASSIFICATION else None,
     )
 
-    pipe = build_pipeline(df, model_name, task_type, target)
+    pipe = build_pipeline(
+        df, model_name, task_type, target, casts=casts, normalizations=normalizations
+    )
     pipe.fit(X_train, y_train)
     y_pred = pipe.predict(X_test)
 
@@ -155,6 +200,8 @@ def tune_model(
     test_size=0.2,
     random_state=42,
     selections=None,
+    casts=None,
+    normalizations=None,
     progress_callback=None,
 ):
     """Entrena un modelo con búsqueda de hiperparámetros.
@@ -171,6 +218,10 @@ def tune_model(
     selections : dict | None
         Valores elegidos en la interfaz para cada hiperparámetro. Los que no
         aparecen se explorarían en su dominio completo.
+    casts : dict | None
+        Tipos forzados por columna, `{columna: tipo}`.
+    normalizations : dict | None
+        Normalización por columna, `{columna: método}`.
     progress_callback : callable | None
         Función que se invoca con (combinación_actual, total) si el
         backend lo permite. Se usa desde la UI para reportar progreso.
@@ -187,11 +238,9 @@ def tune_model(
         stratify=y if task_type == CLASSIFICATION else None,
     )
 
-    base_model = model_specs.build_estimator(model_name, task_type)
-    pipe = Pipeline([
-        ("preprocessor", build_preprocessor(X_train)),
-        ("model", base_model),
-    ])
+    pipe = build_pipeline(
+        df, model_name, task_type, target, casts=casts, normalizations=normalizations
+    )
 
     param_grid = search_grid(model_name, task_type, selections)
     if not param_grid:
@@ -203,7 +252,7 @@ def tune_model(
 
     scoring = _scoring_for(task_type, metric)
     if scoring == "roc_auc":
-        scoring = _resolve_roc_auc(base_model, y)
+        scoring = _resolve_roc_auc(pipe.named_steps["model"], y)
 
     if search_type == "random":
         search = RandomizedSearchCV(

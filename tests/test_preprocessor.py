@@ -112,12 +112,27 @@ def test_column_normalizer_es_un_transformador():
     assert out["a"].tolist() == [0.0, 0.5, 1.0]
 
 
+def test_column_normalizer_reutiliza_las_constantes_de_entrenamiento():
+    normalizer = preprocessor.ColumnNormalizer({"a": "minmax"}).fit(
+        pd.DataFrame({"a": [0.0, 10.0]})
+    )
+    nuevo = normalizer.transform(pd.DataFrame({"a": [20.0]}))
+    assert nuevo["a"].tolist() == [2.0]
+
+
+def test_column_normalizer_sin_fit_normaliza_el_lote():
+    normalizer = preprocessor.ColumnNormalizer({"a": "standard"})
+    X = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
+    out = normalizer.transform(X)
+    assert out["a"].mean() == pytest.approx(0.0, abs=1e-9)
+
+
 def test_transformers_son_picklables():
     import pickle
+    datos = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
     for obj in (
         preprocessor.ColumnTyper({"a": "numerico"}),
         preprocessor.ColumnNormalizer({"a": "standard"}),
     ):
-        assert pickle.loads(pickle.dumps(obj)).transform(
-            pd.DataFrame({"a": [1.0, 2.0, 3.0]})
-        ) is not None
+        copia = pickle.loads(pickle.dumps(obj))
+        assert copia.fit(datos).transform(datos) is not None

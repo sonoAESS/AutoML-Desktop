@@ -20,8 +20,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from core import model_specs
 from core.model_specs import CLASSIFICATION, REGRESSION
 from core.preprocessor import (
-    ColumnNormalizer, ColumnTyper, cast_columns, categorical_columns,
-    normalization_plan, normalize_columns, numeric_columns,
+    ColumnNormalizer, ColumnTyper, apply_transformations, categorical_columns,
+    numeric_columns,
 )
 
 #: Modelos por tarea (instancias de referência, se mantienen por compatibilidad).
@@ -94,14 +94,29 @@ def build_pipeline(df, model_name, task_type, target, casts=None, normalizations
 def transform_dataset(df, casts=None, normalizations=None):
     """Aplica al dataset los mismos pasos previos del pipeline.
 
-    Sirve para obtener el dataset transformado que se muestra y se guarda
-    junto al modelo.
+    Sirve para obtener el dataset transformado antes de entrenar, con las
+    constantes calculadas sobre el dataset completo.
+    """
+    return apply_transformations(df, casts, normalizations)
+
+
+#: Pasos del pipeline que transforman el dataset sin codificar variables.
+DATASET_STEPS = ("typer", "normalizer")
+
+
+def transform_with_pipeline(df, pipe):
+    """Transforma el dataset con los pasos ya entrenados del pipeline.
+
+    A diferencia de `transform_dataset`, reutiliza las constantes aprendidas
+    durante el entrenamiento, de modo que el dataset que se guarda junto al
+    modelo es exactamente el que el modelo procesó.
     """
     out = df
-    if casts:
-        out = cast_columns(out, casts)
-    for method, columns in normalization_plan(normalizations).items():
-        out = normalize_columns(out, columns, method)
+    steps = getattr(pipe, "named_steps", {})
+    for name in DATASET_STEPS:
+        step = steps.get(name)
+        if step is not None:
+            out = step.transform(out)
     return out
 
 

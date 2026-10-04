@@ -8,6 +8,8 @@ Las transformaciones se pueden aplicar de dos formas equivalentes:
 - como pasos del pipeline (`ColumnTyper`, `ColumnNormalizer`), para que un
   modelo guardado aplique exactamente la misma transformación a datos nuevos.
 """
+from typing import Optional
+
 import numpy as np
 import pandas as pd
 from pandas.api import types as pdt
@@ -191,6 +193,25 @@ def normalization_plan(normalizations: dict) -> dict:
     return plan
 
 
+def apply_transformations(
+    df: pd.DataFrame,
+    casts: Optional[dict] = None,
+    normalizations: Optional[dict] = None,
+) -> pd.DataFrame:
+    """Aplica cambios de tipo y normalización en un solo paso.
+
+    Es la transformación que se aplica al dataset para mostrarlo y guardarlo,
+    y la que replican los pasos `ColumnTyper` y `ColumnNormalizer` del
+    pipeline.
+    """
+    out = df
+    if casts:
+        out = cast_columns(out, casts)
+    for method, columns in normalization_plan(normalizations).items():
+        out = normalize_columns(out, columns, method)
+    return out
+
+
 def suggested_normalizations(df, profiles, factor: float = 10.0) -> dict:
     """Propone normalizar las columnas numéricas con una escala muy distinta.
 
@@ -243,17 +264,79 @@ class ColumnTyper(BaseEstimator, TransformerMixin):
 
 
 class ColumnNormalizer(BaseEstimator, TransformerMixin):
-    """Paso de pipeline que normaliza columnas numéricas."""
+    """Paso de pipeline que normaliza columnas numéricas.
+
+    Las constantes (media, desviación, mínimo, máximo, cuartiles) se calculan
+    en `fit` con los datos de entrenamiento y se reutilizan en `transform`, de
+    forma que al predecir con datos nuevos se aplica la misma transformación
+    que durante el entrenamiento. Si no se ha llamado a `fit`, se normaliza
+    cada lote por separado.
+    """
 
     def __init__(self, normalizations=None):
         self.normalizations = normalizations or {}
 
     def fit(self, X, y=None):
+        frame = _as_frame(X)
+        stats = {}
+        for method, columns in normalization_plan(self.normalizations).items():
+            for column in columns:
+                values = _numeric_values(frame, column)
+                if values is None or values.empty:
+                    continue
+                stats[column] = _normalization_stats(method, values)
+        self.stats_ = stats
         return self
 
     def transform(self, X):
-        frame = X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
-        out = frame
-        for method, columns in normalization_plan(self.normalizations).items():
-            out = normalize_columns(out, columns, method)
+        frame = _as_frame(X)
+        stats = getattr(self, "stats_", None)
+        if not stats:
+            return _normalize_with_batch_stats(frame, self.normalizations)
+        out = frame.copy()
+        for column, entry in stats.items():
+            if column not in out.columns:
+                continue
+            out[column] = _apply_stats(
+                pd.to_numeric(out[column], errors="coerce"), entry
+            )
         return out
+
+
+def _as_frame(X) -> pd.DataFrame:
+    return X if isinstance(X, pd.DataFrame) else pd.DataFrame(X)
+
+
+def _numeric_values(frame: pd.DataFrame, column: str):
+    if column not in frame.columns:
+        return None
+    return pd.to_numeric(frame[column], errors="coerce").dropna()
+
+
+def _normalization_stats(method: str, values: pd.Series) -> dict:
+    entry = {"method": method}
+    if method == "standard":
+        entry["center"] = float(values.mean())
+        entry["scale"] = _safe_std(values)
+    elif method == "minmax":
+        entry["center"] = float(values.min())
+        entry["scale"] = float(values.max() - values.min()) or 1.0
+    elif method == "robust":
+        q75, q25 = values.quantile(0.75), values.quantile(0.25)
+        entry["center"] = float(values.median())
+        entry["scale"] = float(q75 - q25) or 1.0
+    return entry
+
+
+def _apply_stats(values: pd.Series, entry: dict) -> pd.Series:
+    method = entry["method"]
+    if method == "log":
+        return np.log1p(values.clip(lower=0))
+    return (values - entry["center"]) / entry["scale"]
+
+
+def _normalize_with_batch_stats(frame: pd.DataFrame, normalizations: dict) -> pd.DataFrame:
+    out = frame
+    for method, columns in normalization_plan(normalizations).items():
+        out = normalize_columns(out, columns, method)
+    return out

@@ -2,5 +2,11 @@ entorno/
 example/
 build/
 dist/
-*.spec
-__pycache__
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+# `AutoML_MEC_Desktop.spec` sí se versiona: es la definición reproducible de
+# la compilación de PyInstaller. Si se regenera con `pyinstaller --onefile`
+# hay que copiarlo de vuelta a la raíz.

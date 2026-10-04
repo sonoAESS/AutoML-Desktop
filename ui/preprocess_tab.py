@@ -1,11 +1,23 @@
 # ui/preprocess_tab.py
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGroupBox, QCheckBox, QComboBox, QPushButton,
-    QLabel, QMessageBox, QListWidget, QListWidgetItem, QHBoxLayout,
-    QTableWidget, QTableWidgetItem, QHeaderView,
+    QCheckBox,
+    QComboBox,
+    QGroupBox,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
-from core import preprocessor, profiling
+
+from core import balancing, preprocessor, profiling
 
 METHOD_LABELS = {
     "none": "sin normalizar",
@@ -67,9 +79,7 @@ class PreprocessTab(QWidget):
         self.table_norm.setHorizontalHeaderLabels(
             ["Columna", "Rango actual", "Normalización"]
         )
-        self.table_norm.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch
-        )
+        self.table_norm.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table_norm.verticalHeader().setVisible(False)
         v.addWidget(self.table_norm)
         layout.addWidget(gb_norm)
@@ -80,6 +90,21 @@ class PreprocessTab(QWidget):
         self.list_cols.setSelectionMode(QListWidget.MultiSelection)
         v.addWidget(self.list_cols)
         layout.addWidget(gb_cols)
+
+        self.gb_distribucion = QGroupBox("Distribución de clases")
+        v = QVBoxLayout(self.gb_distribucion)
+        self.lbl_distribucion = QLabel("Carga un dataset y elige un objetivo.")
+        self.lbl_distribucion.setWordWrap(True)
+        v.addWidget(self.lbl_distribucion)
+        self.tbl_distribucion = QTableWidget()
+        self.tbl_distribucion.setColumnCount(3)
+        self.tbl_distribucion.setHorizontalHeaderLabels(["Clase", "Instancias", "%"])
+        self.tbl_distribucion.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Stretch
+        )
+        self.tbl_distribucion.verticalHeader().setVisible(False)
+        v.addWidget(self.tbl_distribucion)
+        layout.addWidget(self.gb_distribucion)
 
         self.btn_apply = QPushButton("Aplicar preprocesamiento")
         self.btn_apply.clicked.connect(self.apply)
@@ -94,6 +119,40 @@ class PreprocessTab(QWidget):
         self._fill_columns()
         self._show_casts()
         self._fill_normalizations()
+        self._show_distribution()
+
+    def _show_distribution(self):
+        """Tabla con la distribución de clases del objetivo elegido."""
+        objetivo = self.state.target_column
+        if (
+            self.state.task_type != "classification"
+            or not objetivo
+            or self.state.clean_df is None
+            or objetivo not in self.state.clean_df.columns
+        ):
+            self.gb_distribucion.setVisible(False)
+            return
+
+        self.gb_distribucion.setVisible(True)
+        serie = self.state.clean_df[objetivo]
+        distribucion = balancing.class_distribution(serie)
+        self.state.class_distribution = distribucion.as_dict()
+
+        self.lbl_distribucion.setText(distribucion.describe())
+        if distribucion.is_imbalanced:
+            self.lbl_distribucion.setStyleSheet("font-weight: bold;")
+        else:
+            self.lbl_distribucion.setStyleSheet("")
+
+        self.tbl_distribucion.setRowCount(len(distribucion.rows))
+        for fila, fila_datos in enumerate(distribucion.rows):
+            self.tbl_distribucion.setItem(
+                fila, 0, QTableWidgetItem(str(fila_datos.clase))
+            )
+            self.tbl_distribucion.setItem(fila, 1, QTableWidgetItem(str(fila_datos.n)))
+            self.tbl_distribucion.setItem(
+                fila, 2, QTableWidgetItem(f"{fila_datos.pct:.1%}")
+            )
 
     def _fill_columns(self):
         self.list_cols.clear()
@@ -130,16 +189,12 @@ class PreprocessTab(QWidget):
             for profile in profiling.profile_dataframe(self.state.raw_df)
             if profile.semantic_type == "numerico"
         ]
-        sugeridas = preprocessor.suggested_normalizations(
-            self.state.raw_df, numericas
-        )
+        sugeridas = preprocessor.suggested_normalizations(self.state.raw_df, numericas)
 
         for fila, profile in enumerate(numericas):
             self.table_norm.insertRow(fila)
             self.table_norm.setItem(fila, 0, QTableWidgetItem(profile.name))
-            self.table_norm.setItem(
-                fila, 1, QTableWidgetItem(profile.value_range)
-            )
+            self.table_norm.setItem(fila, 1, QTableWidgetItem(profile.value_range))
 
             combo = QComboBox()
             for metodo in preprocessor.NORMALIZATION_METHODS:

@@ -11,26 +11,50 @@ class TuneWorker(QObject):
     que `progress` puede invocarse desde dentro de `tune_model` sin cuidado.
     """
 
-    finished = Signal(object, dict, tuple, object)   # pipe, metrics, test_data, cv_results
+    finished = Signal(
+        object, dict, tuple, object
+    )  # pipe, metrics, test_data, cv_results
     failed = Signal(str)
     # Etapa actual, ajustes completados y ajustes totales (0 = sin total).
     progress = Signal(str, int, int)
 
-    def __init__(self, df, target, model_name, task_type,
-                 search_type, metric, cv, n_iter,
-                 selections=None, casts=None, normalizations=None):
+    def __init__(
+        self,
+        df,
+        target,
+        model_name,
+        task_type,
+        search_type,
+        metric,
+        cv,
+        n_iter,
+        selections=None,
+        casts=None,
+        normalizations=None,
+        balancing=None,
+    ):
         super().__init__()
         self._kwargs = dict(
-            df=df, target=target, model_name=model_name,
-            task_type=task_type, search_type=search_type,
-            metric=metric, cv=cv, n_iter=n_iter,
-            selections=selections, casts=casts, normalizations=normalizations,
+            df=df,
+            target=target,
+            model_name=model_name,
+            task_type=task_type,
+            search_type=search_type,
+            metric=metric,
+            cv=cv,
+            n_iter=n_iter,
+            selections=selections,
+            casts=casts,
+            normalizations=normalizations,
+            balancing=balancing,
         )
 
     def run(self):
         try:
             self.progress.emit(
-                "Explorando hiperparámetros…", 0, 0,
+                "Explorando hiperparámetros…",
+                0,
+                0,
             )
             pipe, metrics, test_data, cv_results = model_trainer.tune_model(
                 progress_callback=self._reportar,

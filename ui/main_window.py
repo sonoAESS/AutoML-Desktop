@@ -1,12 +1,12 @@
 # ui/main_window.py
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QStatusBar
+from PySide6.QtWidgets import QMainWindow, QStatusBar, QTabWidget
 
 from core.state import AppState
 from ui.data_tab import DataTab
-from ui.preprocess_tab import PreprocessTab
-from ui.train_tab import TrainTab
-from ui.results_tab import ResultsTab
 from ui.predict_tab import PredictTab
+from ui.preprocess_tab import PreprocessTab
+from ui.results_tab import ResultsTab
+from ui.train_tab import TrainTab
 
 
 class MainWindow(QMainWindow):
@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
         self.data_tab.data_loaded.connect(self.preprocess_tab.refresh)
         self.data_tab.data_loaded.connect(self.train_tab.refresh)
         self.data_tab.profile_changed.connect(self._on_profile_changed)
+        self.train_tab.config_changed.connect(self.preprocess_tab.refresh)
         self.preprocess_tab.data_processed.connect(self._on_data_processed)
         self.train_tab.model_trained.connect(self.results_tab.refresh)
         self.results_tab.model_saved.connect(self._on_model_saved)

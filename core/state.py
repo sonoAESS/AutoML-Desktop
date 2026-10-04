@@ -23,7 +23,7 @@ class AppState:
 
     # --- Modelo ---
     target_column: Optional[str] = None
-    task_type: Optional[str] = None       # "classification" | "regression"
+    task_type: Optional[str] = None  # "classification" | "regression"
     model_name: Optional[str] = None
     family: Optional[str] = None
     pipeline: Optional[Pipeline] = None
@@ -31,6 +31,10 @@ class AppState:
     metrics: dict = field(default_factory=dict)
     _cv_results: dict = field(default_factory=dict)
     _test_data: Optional[tuple] = None
+
+    # --- Balanceo de clases ---
+    balancing: Optional[str] = None
+    class_distribution: Optional[dict] = None
 
     # --- Persistencia ---
     bundle_path: Optional[str] = None
@@ -54,6 +58,8 @@ class AppState:
         self.metrics = {}
         self._cv_results = {}
         self._test_data = None
+        self.balancing = None
+        self.class_distribution = None
         self.bundle_path = None
 
     def reset_model(self):

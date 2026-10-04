@@ -11,14 +11,16 @@ Un *bundle* (extensión `.automl`) contiene en un único archivo:
 Advertencia: el formato usa `joblib`, que al leer ejecuta código Python. Como
 ocurre con cualquier fichero `pickle`, carga solo bundles de confianza.
 """
+
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 import joblib
+import numpy as np
 import pandas as pd
 import sklearn
 
@@ -27,6 +29,7 @@ from core import model_specs, preprocessor, profiling
 BUNDLE_VERSION = 1
 BUNDLE_SUFFIX = ".automl"
 PREDICTION_COLUMN = "prediccion"
+PROBABILITY_PREFIX = "prob_"
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,7 @@ class BundleMetadata:
     best_params: dict = field(default_factory=dict)
     casts: dict = field(default_factory=dict)
     normalizations: dict = field(default_factory=dict)
+    balancing: dict = field(default_factory=dict)
     n_train_rows: int = 0
     dataset_included: bool = False
     dataset_path: Optional[str] = None
@@ -72,6 +76,8 @@ class BundleMetadata:
                 if k != "best_params"
             )
             lineas.append(f"Métricas: {metricas}")
+        if self.balancing:
+            lineas.append(_balancing_line(self.balancing))
         if self.dataset_included:
             lineas.append("Incluye el dataset transformado")
         return "\n".join(lineas)
@@ -94,6 +100,7 @@ class SchemaReport:
     unexpected: tuple = ()
     n_rows: int = 0
     n_converted: int = 0
+    renamed: tuple = ()
 
     @property
     def ok(self) -> bool:
@@ -102,9 +109,7 @@ class SchemaReport:
     def describe(self) -> str:
         lineas = []
         if self.missing:
-            lineas.append(
-                "Faltan columnas obligatorias: " + ", ".join(self.missing)
-            )
+            lineas.append("Faltan columnas obligatorias: " + ", ".join(self.missing))
         if self.unexpected:
             lineas.append(
                 "Columnas ignoradas (no las usa el modelo): "
@@ -114,6 +119,13 @@ class SchemaReport:
             lineas.append(
                 f"{self.n_converted} columna(s) convertidas al tipo con el que "
                 "se entrenó"
+            )
+        if self.renamed:
+            lineas.append(
+                "Columnas renombradas al añadir la predicción: "
+                + ", ".join(
+                    f"{pedido} → {asignado}" for pedido, asignado in self.renamed
+                )
             )
         if self.ok and not lineas:
             lineas.append("Las columnas coinciden con el esquema del modelo.")
@@ -129,6 +141,7 @@ def build_metadata(
     df: Optional[pd.DataFrame] = None,
     casts: Optional[dict] = None,
     normalizations: Optional[dict] = None,
+    balancing: Optional[dict] = None,
     app_version: str = "1.0",
     dataset_path: Optional[str] = None,
     notes: str = "",
@@ -136,9 +149,11 @@ def build_metadata(
     """Construye los metadatos de un modelo a partir del pipeline entrenado."""
     steps = getattr(pipeline, "named_steps", {})
     preprocessor_step = steps.get("preprocessor")
-    feature_columns = tuple(preprocessor_step.feature_names_in_) if (
-        hasattr(preprocessor_step, "feature_names_in_")
-    ) else ()
+    feature_columns = (
+        tuple(preprocessor_step.feature_names_in_)
+        if (hasattr(preprocessor_step, "feature_names_in_"))
+        else ()
+    )
 
     model = steps.get("model")
     clases = getattr(model, "classes_", None)
@@ -158,9 +173,7 @@ def build_metadata(
         }
 
     return BundleMetadata(
-        created_at=datetime.now(timezone.utc).astimezone().strftime(
-            "%Y-%m-%d %H:%M"
-        ),
+        created_at=datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M"),
         app_version=app_version,
         sklearn_version=sklearn.__version__,
         task_type=task_type,
@@ -174,11 +187,65 @@ def build_metadata(
         best_params=best_params,
         casts=dict(casts or {}),
         normalizations=dict(normalizations or {}),
+        balancing=_balancing_info(pipeline, balancing),
         n_train_rows=int(len(df)) if df is not None else 0,
         dataset_included=False,
         dataset_path=dataset_path,
         notes=notes,
     )
+
+
+def _balancing_info(pipeline, balancing) -> dict:
+    """Lo que se guarda del balanceo: método, vecinos y distribución.
+
+    Si el pipeline tiene paso `balancer` se toman sus estadísticas (tamaños y
+    clases antes y después). Con `class_weight` no hay remuestreo, así que solo
+    se anota el método.
+    """
+    balancer = getattr(pipeline, "named_steps", {}).get("balancer")
+    if balancer is not None and hasattr(balancer, "stats"):
+        return dict(balancer.stats)
+    if (balancing or {}).get("method") == "class_weight":
+        return {"method": "class_weight"}
+    return {}
+
+
+def balancing_summary(pipeline, balancing=None) -> str:
+    """Línea legible del balanceo, para la interfaz de resultados.
+
+    Los datos salen del propio pipeline si tiene paso `balancer`, así que no
+    hay que confiar en lo que la interfaz recuerda.
+    """
+    return _balancing_line(_balancing_info(pipeline, balancing))
+
+
+def _balancing_line(balancing: dict) -> str:
+    """Línea legible con el efecto del balanceo."""
+    metodo = balancing.get("method")
+    if not metodo or metodo == "none":
+        return "Balanceo: ninguno"
+    if metodo == "class_weight":
+        return "Balanceo: pesos de clase (sin remuestreo)"
+    antes = balancing.get("n_before")
+    despues = balancing.get("n_after")
+    if antes is not None and despues is not None:
+        return f"Balanceo: {metodo} ({antes} → {despues} instancias)"
+    return f"Balanceo: {metodo}"
+
+
+def _upgrade_metadata(metadata: BundleMetadata) -> BundleMetadata:
+    """Rellena los campos que no existían en los bundles antiguos.
+
+    Un `.automl` guardado antes de una spec nueva sigue cargando: le faltan
+    atributos en `__dict__` y `describe()` o `build_metadata` reventarían con
+    `AttributeError`.
+    """
+    cambios = {}
+    if not hasattr(metadata, "balancing"):
+        cambios["balancing"] = {}
+    if cambios:
+        metadata = replace(metadata, **cambios)
+    return metadata
 
 
 def _family_of(model_name: str, task_type: str) -> str:
@@ -199,9 +266,7 @@ def save_bundle(
     if path.suffix == "":
         path = path.with_suffix(BUNDLE_SUFFIX)
     if dataset is not None:
-        metadata = BundleMetadata(
-            **{**metadata.as_dict(), "dataset_included": True}
-        )
+        metadata = BundleMetadata(**{**metadata.as_dict(), "dataset_included": True})
     payload = {
         "bundle_version": BUNDLE_VERSION,
         "pipeline": pipeline,
@@ -232,7 +297,7 @@ def load_bundle(path) -> Bundle:
         )
     return Bundle(
         pipeline=payload["pipeline"],
-        metadata=payload["metadata"],
+        metadata=_upgrade_metadata(payload["metadata"]),
         dataset=payload.get("dataset"),
     )
 
@@ -240,7 +305,10 @@ def load_bundle(path) -> Bundle:
 def check_schema(df: pd.DataFrame, metadata: BundleMetadata) -> SchemaReport:
     """Compara las columnas de un CSV con las que el modelo espera."""
     requeridas = list(metadata.feature_columns)
-    if metadata.target_column in df.columns and metadata.target_column not in requeridas:
+    if (
+        metadata.target_column in df.columns
+        and metadata.target_column not in requeridas
+    ):
         requeridas = requeridas + [metadata.target_column]
 
     missing = [column for column in requeridas if column not in df.columns]
@@ -276,8 +344,7 @@ def align_features(
     report = check_schema(df, metadata)
     if report.missing and strict:
         raise ValueError(
-            "Faltan columnas obligatorias en el archivo: "
-            + ", ".join(report.missing)
+            "Faltan columnas obligatorias en el archivo: " + ", ".join(report.missing)
         )
 
     frame = df.copy()
@@ -293,16 +360,24 @@ def align_features(
             frame[column] = _coerce_dtype(frame[column], dtype)
             convertible += 1
 
-    y = frame[metadata.target_column] if metadata.target_column in frame.columns else None
+    y = (
+        frame[metadata.target_column]
+        if metadata.target_column in frame.columns
+        else None
+    )
     X = frame.drop(columns=[metadata.target_column], errors="ignore")
     X = X[[column for column in metadata.feature_columns if column in X.columns]]
     X = X.reindex(columns=list(metadata.feature_columns))
 
-    return X, y, SchemaReport(
-        missing=report.missing,
-        unexpected=report.unexpected,
-        n_rows=report.n_rows,
-        n_converted=convertible,
+    return (
+        X,
+        y,
+        SchemaReport(
+            missing=report.missing,
+            unexpected=report.unexpected,
+            n_rows=report.n_rows,
+            n_converted=convertible,
+        ),
     )
 
 
@@ -324,6 +399,56 @@ def _coerce_dtype(series: pd.Series, dtype: str) -> pd.Series:
         return series
 
 
+def _prediction_columns(bundle: Bundle, X: pd.DataFrame) -> dict:
+    """Columnas de predicción de un bundle: `{nombre: valores}`.
+
+    Se mantiene separado de `predict`/`predict_frame` para que ambas rutas
+    calculen exactamente lo mismo.
+    """
+    modelo = bundle.pipeline
+    columnas = {PREDICTION_COLUMN: modelo.predict(X)}
+    if hasattr(modelo, "predict_proba"):
+        try:
+            probas = modelo.predict_proba(X)
+            clases = bundle.metadata.classes or getattr(modelo, "classes_", ())
+            for indice, clase in enumerate(clases):
+                columnas[f"{PROBABILITY_PREFIX}{clase}"] = probas[:, indice]
+        except (AttributeError, ValueError, IndexError, KeyError):
+            pass
+    return columnas
+
+
+def _free_names(existing, nuevos: dict) -> dict:
+    """Nombre libre para cada columna nueva.
+
+    Si el input ya trae una columna `prediccion`, la nueva se llama
+    `prediccion_2`, luego `prediccion_3`… La columna del usuario no se toca.
+    """
+    usados = {str(nombre) for nombre in existing}
+    libres = {}
+    for nombre in nuevos:
+        candidato = str(nombre)
+        contador = 2
+        while candidato in usados:
+            candidato = f"{nombre}_{contador}"
+            contador += 1
+        usados.add(candidato)
+        libres[nombre] = candidato
+    return libres
+
+
+def _predictor(bundle: Bundle, df: pd.DataFrame, strict: bool = True):
+    """Núcleo compartido: `(X, y, report, columnas_de_predicción)`."""
+    X, y, report = align_features(df, bundle.metadata, strict=strict)
+    columnas = _prediction_columns(bundle, X)
+    if X.shape[0] != len(df):
+        raise ValueError(
+            f"El modelo devolvió {X.shape[0]} predicciones para "
+            f"{len(df)} filas de entrada."
+        )
+    return X, y, report, columnas
+
+
 def predict(bundle: Bundle, df: pd.DataFrame, strict: bool = True):
     """Aplica un modelo guardado a un dataset nuevo.
 
@@ -331,22 +456,49 @@ def predict(bundle: Bundle, df: pd.DataFrame, strict: bool = True):
     --------
     (predicciones, report, X, y)
         `predicciones` es un `DataFrame` con la columna `prediccion` y, si el
-        modelo da probabilidades, una columna por clase.
+        modelo da probabilidades, una columna por clase. No incluye las
+        columnas de entrada; para eso está `predict_frame`.
     """
-    X, y, report = align_features(df, bundle.metadata, strict=strict)
-    modelo = bundle.pipeline
-    predicciones = modelo.predict(X)
-
-    salida = pd.DataFrame({PREDICTION_COLUMN: predicciones}, index=X.index)
-    if hasattr(modelo, "predict_proba"):
-        try:
-            probas = modelo.predict_proba(X)
-            clases = bundle.metadata.classes or getattr(modelo, "classes_", ())
-            for indice, clase in enumerate(clases):
-                salida[f"prob_{clase}"] = probas[:, indice]
-        except (AttributeError, ValueError, IndexError):
-            pass
+    X, y, report, columnas = _predictor(bundle, df, strict=strict)
+    nombres = _free_names(df.columns, columnas)
+    salida = pd.DataFrame(
+        {nombres[nombre]: valores for nombre, valores in columnas.items()},
+        index=X.index,
+    )
     return salida, report, X, y
+
+
+def predict_frame(
+    bundle: Bundle, df: pd.DataFrame, strict: bool = True
+) -> tuple[pd.DataFrame, SchemaReport]:
+    """Devuelve el dataset de entrada **más** las columnas de predicción.
+
+    Es la función que usa la exportación: el `DataFrame` devuelto tiene las
+    columnas de entrada tal como se cargaron, con `prediccion` (y
+    `prob_<clase>`) añadidas al final. Si algún nombre ya existe en la entrada
+    se añade un sufijo `_2`, `_3`… y el conflicto queda anotado en
+    `report.renamed`.
+
+    Args:
+        bundle: modelo cargado.
+        df: dataset de entrada, sin modificar.
+        strict: si es `True`, `align_features` exige todas las columnas.
+
+    Returns:
+        `(frame, report)` con el frame ampliado y el informe del esquema.
+
+    Raises:
+        ValueError: si el número de predicciones no coincide con las filas.
+    """
+    X, y, report, columnas = _predictor(bundle, df, strict=strict)
+    nombres = _free_names(df.columns, columnas)
+    frame = df.copy()
+    for nombre, valores in columnas.items():
+        frame[nombres[nombre]] = np.asarray(valores)
+    renombradas = tuple(
+        (nombre, nombres[nombre]) for nombre in columnas if nombres[nombre] != nombre
+    )
+    return frame, replace(report, renamed=renombradas)
 
 
 def profile_input(df: pd.DataFrame, metadata: BundleMetadata) -> list:

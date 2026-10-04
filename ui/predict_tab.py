@@ -1,9 +1,49 @@
 # ui/predict_tab.py
+import importlib.util
+
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QFileDialog,
-    QMessageBox, QTableWidget, QTableWidgetItem, QGroupBox,
+    QFileDialog,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
+
 from core import data_loader, persistence
+from ui import file_dialogs
+
+EXPORT_FILTER = "CSV (*.csv);;Excel (*.xlsx)"
+EXPORT_PREFERENCE = (";", ",", "\t", "|")
+
+
+def export_csv(df, ruta: str):
+    """Escribe un CSV que Excel en español abre con un solo clic.
+
+    El separador es el que aparezca en los nombres de las columnas; si ninguno
+    aparece se usa `;`, que es el que espera Excel en configuración regional
+    española (C-007). El `utf-8-sig` evita que las tildes se vean mal.
+    """
+    # Se unen con un espacio y no con ",": si se unieran con una coma, la
+    # detección encontraría siempre esa coma y elegiría mal el separador.
+    cabecera = " ".join(str(columna) for columna in df.columns)
+    sep = data_loader.detect_separator(cabecera, preference=EXPORT_PREFERENCE)
+    df.to_csv(ruta, index=False, sep=sep or ";", encoding="utf-8-sig")
+
+
+def export_excel(df, ruta: str):
+    """Escribe un XLSX; exige `openpyxl` instalado."""
+    if importlib.util.find_spec("openpyxl") is None:
+        raise RuntimeError(
+            "Falta el paquete «openpyxl» para exportar a Excel. "
+            "Instálalo con:  pip install openpyxl\n\n"
+            "Mientras tanto, elige la opción CSV."
+        )
+    df.to_excel(ruta, index=False, engine="openpyxl")
 
 
 class PredictTab(QWidget):
@@ -13,6 +53,7 @@ class PredictTab(QWidget):
         super().__init__()
         self.state = state
         self._input_df = None
+        self._preview = None
         self._predictions = None
         self._build_ui()
 
@@ -23,7 +64,7 @@ class PredictTab(QWidget):
         top = QHBoxLayout()
         self.btn_load_model = QPushButton("Cargar modelo (.automl)…")
         self.btn_load_model.clicked.connect(self.load_bundle)
-        self.btn_load_data = QPushButton("Cargar datos de entrada (CSV)…")
+        self.btn_load_data = QPushButton("Cargar datos de entrada…")
         self.btn_load_data.clicked.connect(self.load_data)
         self.btn_load_data.setEnabled(False)
         top.addWidget(self.btn_load_model)
@@ -53,7 +94,7 @@ class PredictTab(QWidget):
         self.btn_predict.clicked.connect(self.predict)
         layout.addWidget(self.btn_predict)
 
-        self.btn_export = QPushButton("Exportar predicciones (CSV)")
+        self.btn_export = QPushButton("Exportar resultados (datos + predicción)…")
         self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self.export_predictions)
         layout.addWidget(self.btn_export)
@@ -112,15 +153,17 @@ class PredictTab(QWidget):
                 self, "Faltan datos", "Primero carga un modelo guardado."
             )
             return
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar CSV de entrada", "", "CSV (*.csv *.txt *.tsv)"
-        )
+        path = file_dialogs.choose_table_file(self, "Seleccionar datos de entrada")
         if not path:
             return
         try:
-            df = data_loader.load_csv(path)
+            hojas = data_loader.list_sheets(path)
+            hoja = file_dialogs.choose_sheet(self, hojas)
+            if len(hojas) > 1 and hoja is None:
+                return
+            df = data_loader.load_table(path, sheet=hoja if hoja else 0)
         except Exception as e:
-            QMessageBox.critical(self, "Error", str(e))
+            QMessageBox.critical(self, "Error al cargar los datos", str(e))
             return
 
         self._input_df = df
@@ -141,20 +184,18 @@ class PredictTab(QWidget):
     def predict(self):
         if self.state.bundle is None or self._input_df is None:
             QMessageBox.warning(
-                self, "Faltan datos", "Carga un modelo y un CSV de entrada."
+                self,
+                "Faltan datos",
+                "Carga un modelo y un fichero de datos de entrada.",
             )
             return
         try:
-            salida, report, _, _ = persistence.predict(
-                self.state.bundle, self._input_df
-            )
+            frame, report = self._aplicar(strict=True)
         except ValueError:
             if not self._confirmar_sin_columnas():
                 return
             try:
-                salida, report, _, _ = persistence.predict(
-                    self.state.bundle, self._input_df, strict=False
-                )
+                frame, report = self._aplicar(strict=False)
             except Exception as e:
                 QMessageBox.critical(self, "Error al predecir", str(e))
                 return
@@ -162,11 +203,24 @@ class PredictTab(QWidget):
             QMessageBox.critical(self, "Error al predecir", str(e))
             return
 
-        self._predictions = salida
-        self._fill_table(self.table_salida, salida, max_rows=500)
+        columnas_nuevas = [
+            c for c in frame.columns if c not in set(self._input_df.columns)
+        ]
+        self._preview = frame[columnas_nuevas]
+        self._predictions = frame
+        self._fill_table(self.table_salida, self._preview, max_rows=500)
         self.btn_export.setEnabled(True)
         self.lbl_resultado.setText(
-            f"{len(salida)} filas predichas.\n{report.describe()}"
+            f"{len(frame)} filas predichas · {len(self._input_df.columns)} columnas "
+            f"de entrada + {len(columnas_nuevas)} de predicción "
+            f"({', '.join(columnas_nuevas)}), todas exportables juntas.\n"
+            f"{report.describe()}"
+        )
+
+    def _aplicar(self, strict=True):
+        """Devuelve `(frame entrada+predicción, report)`."""
+        return persistence.predict_frame(
+            self.state.bundle, self._input_df, strict=strict
         )
 
     def _confirmar_sin_columnas(self):
@@ -186,22 +240,34 @@ class PredictTab(QWidget):
         return respuesta == QMessageBox.Yes
 
     def export_predictions(self):
+        """Guarda el CSV de entrada junto con las columnas de predicción."""
         if self._predictions is None:
             return
-        destino, _ = QFileDialog.getSaveFileName(
-            self, "Exportar predicciones", "predicciones.csv", "CSV (*.csv)"
+        destino = file_dialogs.choose_save_path(
+            self,
+            "Exportar resultados (datos + predicción)",
+            "predicciones.csv",
+            EXPORT_FILTER,
         )
         if not destino:
             return
         try:
-            self._predictions.to_csv(destino, index=False)
+            if destino.lower().endswith(".xlsx"):
+                export_excel(self._predictions, destino)
+            else:
+                export_csv(self._predictions, destino)
         except Exception as e:
             QMessageBox.critical(self, "Error al exportar", str(e))
             return
-        self.lbl_resultado.setText(f"Predicciones exportadas en {destino}")
+        self.lbl_resultado.setText(
+            f"Datos y predicciones exportados en {destino}\n"
+            f"({len(self._predictions)} filas · "
+            f"{len(self._predictions.columns)} columnas)"
+        )
 
     # ------------------------------------------------------------------
     def _clear_predictions(self):
+        self._preview = None
         self._predictions = None
         self.table_salida.setRowCount(0)
         self.btn_export.setEnabled(False)

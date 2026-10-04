@@ -1,4 +1,5 @@
 # tests/test_persistence.py
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -7,12 +8,14 @@ from core import model_trainer, persistence
 
 @pytest.fixture
 def dataset():
-    return pd.DataFrame({
-        "edad": [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 22, 33],
-        "ciudad": ["a", "b"] * 6,
-        "alta": ["sí", "no"] * 6,
-        "objetivo": [0, 1] * 6,
-    })
+    return pd.DataFrame(
+        {
+            "edad": [20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 22, 33],
+            "ciudad": ["a", "b"] * 6,
+            "alta": ["sí", "no"] * 6,
+            "objetivo": [0, 1] * 6,
+        }
+    )
 
 
 @pytest.fixture
@@ -28,14 +31,23 @@ def normalizations():
 @pytest.fixture
 def trained(dataset, casts, normalizations):
     pipe, metrics, _ = model_trainer.train_model(
-        dataset, target="objetivo", model_name="Random Forest",
-        task_type="classification", casts=casts, normalizations=normalizations,
+        dataset,
+        target="objetivo",
+        model_name="Random Forest",
+        task_type="classification",
+        casts=casts,
+        normalizations=normalizations,
     )
     export = model_trainer.transform_with_pipeline(dataset, pipe)
     metadata = persistence.build_metadata(
-        pipe, target_column="objetivo", task_type="classification",
-        model_name="Random Forest", metrics=metrics, df=export,
-        casts=casts, normalizations=normalizations,
+        pipe,
+        target_column="objetivo",
+        task_type="classification",
+        model_name="Random Forest",
+        metrics=metrics,
+        df=export,
+        casts=casts,
+        normalizations=normalizations,
     )
     return pipe, metadata, export
 
@@ -55,8 +67,11 @@ def test_build_metadata_recoge_el_esquema(trained):
 
 def test_build_metadata_con_hiperparametros_afinados(dataset, casts):
     pipe, metrics, _, _ = model_trainer.tune_model(
-        dataset, target="objetivo", model_name="Random Forest",
-        task_type="classification", cv=2,
+        dataset,
+        target="objetivo",
+        model_name="Random Forest",
+        task_type="classification",
+        cv=2,
         selections={"n_estimators": 20},
     )
     metadata = persistence.build_metadata(
@@ -172,6 +187,7 @@ def test_profile_input_solo_devuelve_las_columnas_del_modelo(trained, dataset):
     nombres = {p.name for p in persistence.profile_input(nuevo, metadata)}
     assert nombres == {"edad", "ciudad", "alta", "objetivo"}
 
+
 def test_predict_no_normaliza_dos_veces(trained, tmp_path):
     """La normalización la aplica solo el pipeline, no `align_features`."""
     pipe, metadata, export = trained
@@ -206,3 +222,289 @@ def test_predict_sin_columnas_opcionales(trained, tmp_path):
     )
     assert len(salida) == len(export)
     assert "ciudad" in report.missing and "alta" in report.missing
+
+
+# ---------------------------------------------------------------------------
+# SDD-006: exportar los datos de entrada junto con la predicción
+# ---------------------------------------------------------------------------
+
+
+def test_predict_frame_añade_la_prediccion_al_input(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+
+    frame, report = persistence.predict_frame(bundle, dataset)
+
+    entradas = list(dataset.columns)
+    assert list(frame.columns)[: len(entradas)] == entradas
+    assert persistence.PREDICTION_COLUMN in frame.columns
+    assert {"prob_0", "prob_1"} <= set(frame.columns)
+    assert report.ok is True
+    assert report.renamed == ()
+    assert len(frame) == len(dataset)
+
+
+def test_predict_frame_conserva_el_indice_del_input(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+    entrada = dataset.sample(frac=1.0, random_state=0)
+
+    frame, _ = persistence.predict_frame(bundle, entrada)
+
+    assert list(frame.index) == list(entrada.index)
+    esperado, _, _, _ = persistence.predict(bundle, entrada)
+    assert (
+        frame[persistence.PREDICTION_COLUMN].tolist()
+        == esperado[persistence.PREDICTION_COLUMN].tolist()
+    )
+
+
+def test_predict_frame_no_modifica_el_dataframe_recibido(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+    entrada = dataset.copy()
+    columnas_antes = list(entrada.columns)
+
+    persistence.predict_frame(bundle, entrada)
+
+    assert list(entrada.columns) == columnas_antes
+
+
+def test_predict_frame_conserva_la_columna_objetivo(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+
+    frame, _ = persistence.predict_frame(bundle, dataset)
+
+    assert frame["objetivo"].tolist() == dataset["objetivo"].tolist()
+
+
+def test_predict_frame_renombra_si_ya_existe_prediccion(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+    entrada = dataset.assign(prediccion="mía")
+
+    frame, report = persistence.predict_frame(bundle, entrada)
+
+    assert frame["prediccion"].tolist() == ["mía"] * len(entrada)
+    assert "prediccion_2" in frame.columns
+    assert set(report.renamed) == {("prediccion", "prediccion_2")}
+    assert "prediccion → prediccion_2" in report.describe()
+
+
+def test_predict_frame_renombra_en_cascada(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+    entrada = dataset.assign(
+        **{
+            persistence.PREDICTION_COLUMN: "a",
+            f"{persistence.PREDICTION_COLUMN}_2": "b",
+        }
+    )
+
+    frame, _ = persistence.predict_frame(bundle, entrada)
+
+    assert f"{persistence.PREDICTION_COLUMN}_3" in frame.columns
+
+
+def test_predict_sigue_devolviendo_solo_las_columnas_nuevas(trained, dataset, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+
+    salida, _, _, _ = persistence.predict(bundle, dataset)
+
+    assert set(dataset.columns) & set(salida.columns) == set()
+    assert persistence.PREDICTION_COLUMN in salida.columns
+
+
+def test_predict_frame_es_idempotente(trained, dataset, tmp_path):
+    """Aplicar el modelo a su propia salida no debe romper nada."""
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+
+    una_vez, _ = persistence.predict_frame(bundle, dataset)
+    otra_vez, report = persistence.predict_frame(bundle, una_vez)
+
+    assert report.ok is True
+    assert (
+        otra_vez[f"{persistence.PREDICTION_COLUMN}_2"].tolist()
+        == una_vez[persistence.PREDICTION_COLUMN].tolist()
+    )
+
+
+def test_predict_frame_falla_si_el_numero_de_filas_no_cuadra(
+    trained, dataset, tmp_path, monkeypatch
+):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata, dataset=export)
+    )
+    monkeypatch.setattr(
+        persistence,
+        "align_features",
+        lambda *a, **k: (dataset.head(3), None, persistence.SchemaReport()),
+    )
+
+    with pytest.raises(ValueError, match="predicciones"):
+        persistence.predict_frame(bundle, dataset)
+
+
+def test_free_names_genera_sufijos_libres():
+    libres = persistence._free_names(
+        ["a", "prediccion", "prediccion_2"],
+        {"prediccion": [1], "prob_0": [0.5]},
+    )
+    assert libres == {"prediccion": "prediccion_3", "prob_0": "prob_0"}
+
+
+def test_free_names_no_toca_los_demas_nombres():
+    libres = persistence._free_names(["edad"], {"prediccion": [1]})
+    assert libres["prediccion"] == "prediccion"
+
+
+# ---------------------------------------------------------------------------
+# SDD-004: balanceo en los metadatos y migración de bundles antiguos
+# ---------------------------------------------------------------------------
+
+
+def test_build_metadata_guarda_las_estadisticas_del_balanceo():
+    rng = np.random.default_rng(5)
+    dataset = pd.DataFrame(
+        {
+            "edad": rng.integers(20, 80, size=100),
+            "objetivo": ["no"] * 80 + ["sí"] * 20,
+        }
+    )
+
+    pipe, metrics, _ = model_trainer.train_model(
+        dataset,
+        target="objetivo",
+        model_name="Regresión Logística",
+        task_type="classification",
+        balancing={"method": "random_under"},
+    )
+    export = model_trainer.transform_with_pipeline(dataset, pipe)
+    metadata = persistence.build_metadata(
+        pipe,
+        target_column="objetivo",
+        task_type="classification",
+        model_name="Regresión Logística",
+        metrics=metrics,
+        df=export,
+        balancing={"method": "random_under"},
+    )
+
+    assert metadata.balancing["method"] == "random_under"
+    # El balancer solo ve el 80 % de entrenamiento, no el dataset completo.
+    assert metadata.balancing["n_before"] < len(dataset)
+    assert metadata.balancing["n_after"] < metadata.balancing["n_before"]
+    assert "Balanceo: random_under" in metadata.describe()
+
+
+def test_build_metadata_con_class_weight_no_remuestrea(dataset, casts):
+    pipe, metrics, _ = model_trainer.train_model(
+        dataset,
+        target="objetivo",
+        model_name="Regresión Logística",
+        task_type="classification",
+        casts=casts,
+        balancing={"method": "class_weight"},
+    )
+    export = model_trainer.transform_with_pipeline(dataset, pipe)
+    metadata = persistence.build_metadata(
+        pipe,
+        target_column="objetivo",
+        task_type="classification",
+        model_name="Regresión Logística",
+        metrics=metrics,
+        df=export,
+        casts=casts,
+        balancing={"method": "class_weight"},
+    )
+
+    assert metadata.balancing == {"method": "class_weight"}
+    assert "pesos de clase" in metadata.describe()
+
+
+def test_build_metadata_sin_balanceo_no_añade_nada(dataset, casts):
+    pipe, metrics, _ = model_trainer.train_model(
+        dataset,
+        target="objetivo",
+        model_name="Regresión Logística",
+        task_type="classification",
+        casts=casts,
+    )
+    export = model_trainer.transform_with_pipeline(dataset, pipe)
+    metadata = persistence.build_metadata(
+        pipe,
+        target_column="objetivo",
+        task_type="classification",
+        model_name="Regresión Logística",
+        metrics=metrics,
+        df=export,
+        casts=casts,
+    )
+
+    assert metadata.balancing == {}
+    assert "Balanceo" not in metadata.describe()
+
+
+def test_bundle_antiguamente_guardado_sin_balanceo_carga(trained, tmp_path):
+    """Un `.automl` sin el campo `balancing` sigue cargando sin error."""
+    pipe, metadata, export = trained
+    viejo = persistence.BundleMetadata.__new__(persistence.BundleMetadata)
+    viejo.__dict__.update(
+        {k: v for k, v in metadata.__dict__.items() if k != "balancing"}
+    )
+    assert not hasattr(viejo, "balancing")
+
+    ruta = persistence.save_bundle(tmp_path / "viejo.automl", pipe, viejo)
+    cargado = persistence.load_bundle(ruta)
+
+    assert cargado.metadata.balancing == {}
+    assert "Balanceo" not in cargado.metadata.describe()
+
+
+def test_balanceo_sobrevive_al_guardado_y_carga(dataset, casts, tmp_path):
+    pipe, metrics, _ = model_trainer.train_model(
+        dataset,
+        target="objetivo",
+        model_name="Regresión Logística",
+        task_type="classification",
+        casts=casts,
+        balancing={"method": "random_under"},
+    )
+    export = model_trainer.transform_with_pipeline(dataset, pipe)
+    metadata = persistence.build_metadata(
+        pipe,
+        target_column="objetivo",
+        task_type="classification",
+        model_name="Regresión Logística",
+        metrics=metrics,
+        df=export,
+        casts=casts,
+        balancing={"method": "random_under"},
+    )
+    ruta = persistence.save_bundle(tmp_path / "m.automl", pipe, metadata)
+    cargado = persistence.load_bundle(ruta)
+
+    assert cargado.metadata.balancing["method"] == "random_under"
+    assert (
+        cargado.metadata.balancing["n_after"] < cargado.metadata.balancing["n_before"]
+    )

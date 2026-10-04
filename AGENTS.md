@@ -39,6 +39,7 @@ automl_app/
 │   ├── preprocessor.py
 │   ├── model_specs.py
 │   ├── model_trainer.py
+│   ├── balancing.py
 │   ├── persistence.py
 │   └── state.py
 ├── ui/
@@ -49,13 +50,25 @@ automl_app/
 │   ├── train_tab.py
 │   ├── results_tab.py
 │   ├── predict_tab.py
+│   ├── file_dialogs.py
 │   └── workers.py
 ├── resources/
+├── specs/
+│   ├── README.md
+│   └── NNN-slug/
+│       ├── spec.md
+│       ├── design.md
+│       └── tasks.md
 ├── tests/
 ├── pyproject.toml
 ├── AGENTS.md
 └── README.md
 ```
+
+`ui/file_dialogs.py` contiene únicamente los diálogos compartidos de selección
+de ficheros (filtro multiformato, elección de hoja, destino de exportación). No
+es un módulo "catch-all": si alguna función no trata con diálogos de ficheros,
+no pertenece aquí.
 
 Cualquier archivo nuevo debe encajar en esta organización. **No crear
 módulos "catch-all"** del tipo `utils.py` o `helpers.py` sin justificarlo.
@@ -126,6 +139,8 @@ permite al usuario rehacer el preprocesamiento sin recargar el CSV.
   hiperparámetros y reglas de compatibilidad.
 - `model_trainer.py` — solo construcción de pipelines, entrenamiento y
   métricas.
+- `balancing.py` — solo distribución de clases, catálogo de estrategias y el
+  paso `BalancedSampler` que equilibra el pipeline.
 - `persistence.py` — solo guardado/carga de `.automl`, validación de esquema
   y predicción.
 

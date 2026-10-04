@@ -1,14 +1,17 @@
 # AutoML_MEC Desktop
 
 Aplicación de escritorio con Python y Qt (PySide6) que permite cargar un
-archivo CSV, aplicar preprocesamiento y limpieza de datos, y entrenar
+archivo CSV o de Excel, aplicar preprocesamiento y limpieza de datos, y
+entrenar
 modelos de Machine Learning **sin que el usuario necesite escribir código**.
 
 ---
 
 ## Características
 
-- **Carga de CSV** con autodetección de separador y codificación.
+- **Carga de CSV, XLSX, XLS y ODS** con autodetección de separador y
+  codificación (`utf-8-sig` → `cp1252` → `latin-1`). Si el libro de Excel
+  tiene varias hojas, se elige cuál cargar.
 - **Perfilado automático de cada columna**: tipo semántico (numérico,
   booleano, categórico, fecha, texto, identificador), cardinalidad, nulos,
   rango de valores y avisos de incompatibilidad.
@@ -23,6 +26,13 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
   - Conversión de tipos y expansión de fechas (año, mes, día).
   - Normalización por columna (min-max, estándar, logarítmica, ninguna).
   - Eliminación manual de columnas.
+- **Tabla de distribución de clases** en la pestaña de preprocesamiento:
+  instancias y porcentaje de cada clase, **índice de desequilibrio (IR)**
+  (clase mayoritaria / minoritaria, al estilo Weka), entropía de Shannon
+  normalizada y el nivel de imbalance calculado.
+- **Balanceo de clases** opcional al entrenar, con seis estrategias: ninguna,
+  pesos de clase, submuestreo aleatorio, sobremuestreo aleatorio, SMOTE y
+  SMOTEN. Solo en clasificación, y solo con modelos que lo admitan.
 - **Modelos filtrados por compatibilidad**: solo se ofrecen los modelos que
   pueden usarse con esos datos (p. ej. se descartan los que necesitan más
   filas de las que hay) y se explica por qué se descartan.
@@ -34,8 +44,13 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
   gráfico real vs. predicho para regresión y curva de la búsqueda.
 - **Guardado en un único archivo `.automl`** (modelo + metadatos + dataset ya
   transformado) y exportación del dataset a CSV.
-- **Pestaña Predicción**: carga un `.automl`, comprueba el esquema del CSV
-  nuevo y devuelve predicciones con sus probabilidades.
+- **Pestaña Predicción**: carga un `.automl`, comprueba el esquema del
+  fichero nuevo y devuelve predicciones con sus probabilidades.
+- **Exportación con los datos dentro**: el fichero exportado (CSV o XLSX)
+  contiene **el dataset de entrada completo** más las columnas `prediccion` y
+  `prob_<clase>`, para poder analizar el resultado sin volver a unir nada a
+  mano. El CSV se escribe en `utf-8-sig` con `;` para que Excel en español lo
+  abra directamente.
 - **Arquitectura extensible**: pestañas independientes (Datos,
   Preprocesamiento, Entrenamiento, Resultados, Predicción) comunicadas por
   señales Qt.
@@ -49,7 +64,7 @@ automl_app/
 ├── main.py                 # Punto de entrada de la aplicación
 ├── core/                   # Lógica independiente de la GUI
 │   ├── __init__.py
-│   ├── data_loader.py      # Carga y validación de CSV
+│   ├── data_loader.py      # Carga de CSV, XLSX, XLS y ODS
 │   ├── profiling.py        # Perfil semántico y sugerencias
 │   ├── preprocessor.py     # Limpieza, tipos y normalización
 │   ├── model_specs.py      # Catálogo de modelos e hiperparámetros
@@ -64,11 +79,13 @@ automl_app/
 │   ├── train_tab.py        # Pestaña "3. Entrenamiento"
 │   ├── results_tab.py      # Pestaña "4. Resultados"
 │   ├── predict_tab.py      # Pestaña "5. Predicción"
-│   └── workers.py          # Hilos de entrenamiento y búsqueda
+│   ├── file_dialogs.py      # Diálogos compartidos de ficheros
+│   └── workers.py           # Hilos de entrenamiento y búsqueda
 ├── resources/
 │   └── styles.qss          # Hoja de estilos opcional
+├── specs/                 # Especificaciones por funcionalidad (SDD)
 ├── tests/                  # Pruebas unitarias de core/
-├── pyproject.toml          # Configuración del paquete
+├── pyproject.toml          # Dependencias y configuración
 ├── AGENTS.md               # Guía para agentes y contribuidores
 └── README.md
 ```
@@ -80,13 +97,17 @@ de machine learning debe poder probarse sin instanciar Qt.
 
 ## Requisitos
 
-- Python **3.9 o superior**
+- Python **3.10 o superior**
 - Sistema operativo: Linux, macOS o Windows
 
 ### Dependencias
 
+Las dependencias están declaradas en `pyproject.toml`:
+
 ```bash
-pip install PySide6 pandas scikit-learn matplotlib joblib seaborn
+pip install -e .            # núcleo + lectura de Excel (openpyxl, xlrd, odfpy)
+pip install -e ".[smote]"   # añade imbalanced-learn para SMOTE
+pip install -e ".[dev]"     # añade pytest, black, isort, coverage y xlwt
 ```
 
 Opcionales según el uso:
@@ -122,7 +143,7 @@ Se abrirá la ventana principal con las cinco pestañas del flujo de trabajo.
 
 ## Flujo de uso
 
-1. **Datos** — Pulsa *Cargar CSV…* y elige un archivo. La app detecta
+1. **Datos** — Pulsa *Cargar datos…* y elige un archivo. La app detecta
    automáticamente el separador, perfila cada columna y sugiere una variable
    objetivo. Si una columna está mal interpretada (un ID como texto libre,
    por ejemplo), cámbiala con el desplegable de su fila.
@@ -143,9 +164,14 @@ Se abrirá la ventana principal con las cinco pestañas del flujo de trabajo.
    modelo, sus metadatos y el dataset ya transformado. Con *Exportar solo el
    dataset* obtienes el CSV.
 5. **Predicción** — Carga un `.automl` (solo si es de confianza: contiene
-   código compilado), carga el CSV de entrada y pulsa *Aplicar el modelo*.
+   código compilado), carga el fichero de entrada (CSV o Excel) y pulsa
+   *Aplicar el modelo*.
    La app compara las columnas con las del entrenamiento, avisa de las que
-   falten y devuelve las predicciones con sus probabilidades.
+   falten y devuelve las predicciones con sus probabilidades. Con
+   *Exportar resultados* se guardan los datos de entrada **junto con** la
+   predicción en un CSV (`utf-8-sig`, `;`) o en un XLSX. Si el fichero de
+   entrada ya trae una columna `prediccion`, la nueva se llama
+   `prediccion_2` y el aviso lo indica.
 
 ---
 
@@ -179,10 +205,49 @@ de `probability=True`.
 
 ### Métricas reportadas
 
-| Tarea           | Métricas                                  |
-|-----------------|-------------------------------------------|
-| Clasificación   | accuracy, f1_macro, roc_auc (si aplica)   |
-| Regresión       | rmse, mae, r2                             |
+| Tarea           | Métricas                                        |
+|-----------------|-------------------------------------------------|
+| Clasificación   | exactitud, F1 (macro), AUC (ROC One-vs-Rest)   |
+| Regresión       | RMSE, MAE, R²                                   |
+
+Las tres métricas de clasificación se muestran **siempre**, también cuando el
+AUC no se puede calcular (el modelo no da probabilidades, o el conjunto de
+prueba solo tiene una clase): en ese caso la tabla de resultados muestra `n/d`
+y el motivo, en lugar de esconder la métrica.
+
+En multiclase el AUC es *One-vs-Rest* promediado (*macro*). El orden de las
+columnas y los nombres de las clases se toman de `pipe.named_steps["model"].classes_`.
+
+### Balanceo de clases
+
+Cuando la distribución está desequilibrada, el entrenamiento puede
+compensarlo. El balanceo vive **dentro del pipeline**, así que solo se aplica
+a los datos de entrenamiento: el conjunto de prueba conserva su tamaño y sus
+desequilibrios, y las métricas siguen siendo comparables.
+
+| Estrategia         | Qué hace                                                        | Requiere    |
+|--------------------|-----------------------------------------------------------------|-------------|
+| `none`             | No hace nada (valor por defecto)                                 | —           |
+| `class_weight`     | El modelo recibe pesos inversos a la frecuencia de cada clase     | —           |
+| `random_under`     | Submuestrea la clase mayoritaria hasta igualarla con la menor      | —           |
+| `random_over`      | Sobremuestrea replicando filas de la clase minoritaria            | —           |
+| `smote`            | Crea ejemplos sintéticos entre vecinos de la clase minoritaria     | `imbalanced-learn` |
+| `smoten`           | Como SMOTE, con variantes de entropía en los bordes            | `imbalanced-learn` |
+
+Notas:
+
+- Solo hay balanceo en **clasificación**; en regresión el desplegable no aparece.
+- `class_weight` solo se ofrece en modelos que aceptan ese parámetro (no en KNN).
+- Al elegir `class_weight` desaparece el control manual de pesos de clase de los
+  hiperparámetros, para que no se contradigan.
+- SMOTE necesita al menos 6 filas de la clase minoritaria; con menos, avisa en vez
+  de fallar.
+- La pestaña de resultados indica el efecto real: `Balanceo: smote (240 → 480 instancias)`.
+
+**El dataset exportado no se balancea.** `export_df` y el `.automl` guardan los
+datos tal y como salen del preprocesamiento, sin remuestrear ni duplicar filas:
+el balanceo solo existe dentro del modelo y no altera los datos que descarga el
+usuario.
 
 ---
 

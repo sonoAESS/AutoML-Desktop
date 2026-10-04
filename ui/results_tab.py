@@ -125,6 +125,10 @@ class ResultsTab(QWidget):
             persistence.balancing_summary(
                 self.state.pipeline, {"method": self.state.balancing}
             ),
+            persistence.selection_summary(
+                self.state.pipeline,
+                {"method": self.state.selection_method},
+            ),
         ]
         if metrics.get("auc_disponible") is False:
             resumen.append(f"Aviso: {motivo}")

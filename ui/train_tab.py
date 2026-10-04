@@ -1,22 +1,26 @@
 # ui/train_tab.py
-from PySide6.QtCore import QTimer, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFormLayout,
     QGridLayout,
     QGroupBox,
+    QHeaderView,
     QLabel,
     QMessageBox,
     QProgressBar,
     QPushButton,
     QSpinBox,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
-from core import balancing, model_specs, model_trainer, profiling
-from ui.workers import TuneWorker, WorkerThread
+from core import balancing, feature_selection, model_specs, model_trainer, profiling
+from ui.workers import SelectionWorker, TuneWorker, WorkerThread
 
 TASK_LABELS = {
     "classification": "Clasificación",
@@ -111,6 +115,46 @@ class TrainTab(QWidget):
         self.gb_balanceo = gb_balanceo
         layout.addWidget(gb_balanceo)
 
+        gb_seleccion = QGroupBox("Selección de atributos")
+        v_seleccion = QVBoxLayout(gb_seleccion)
+        self.chk_seleccion = QCheckBox("Seleccionar solo los atributos más útiles")
+        self.chk_seleccion.toggled.connect(self._on_seleccion_toggled)
+        v_seleccion.addWidget(self.chk_seleccion)
+
+        form_seleccion = QFormLayout()
+        self.cmb_metodo_sel = QComboBox()
+        self.cmb_criterio_sel = QComboBox()
+        self.cmb_criterio_sel.addItem("Número de atributos (k)", "k")
+        self.cmb_criterio_sel.addItem("Porcentaje", "percentile")
+        self.spn_sel = QSpinBox()
+        self.spn_sel.setRange(1, 10000)
+        self.spn_sel.setValue(10)
+        self.lbl_sel = QLabel("")
+        self.lbl_sel.setWordWrap(True)
+        form_seleccion.addRow("Método:", self.cmb_metodo_sel)
+        form_seleccion.addRow("Criterio:", self.cmb_criterio_sel)
+        form_seleccion.addRow("Valor:", self.spn_sel)
+        form_seleccion.addRow(QLabel(""), self.lbl_sel)
+        v_seleccion.addLayout(form_seleccion)
+
+        self.btn_analizar = QPushButton("Analizar selección")
+        self.btn_analizar.clicked.connect(self.analizar_seleccion)
+        self.btn_analizar.setEnabled(False)
+        v_seleccion.addWidget(self.btn_analizar)
+
+        self.tbl_seleccion = QTableWidget()
+        self.tbl_seleccion.setColumnCount(4)
+        self.tbl_seleccion.setHorizontalHeaderLabels(
+            ["Atributo", "Columnas codificadas", "Puntuación", "Seleccionado"]
+        )
+        self.tbl_seleccion.horizontalHeader().setSectionResizeMode(
+            0, QHeaderView.Stretch
+        )
+        self.tbl_seleccion.verticalHeader().setVisible(False)
+        v_seleccion.addWidget(self.tbl_seleccion)
+        self.gb_seleccion = gb_seleccion
+        layout.addWidget(gb_seleccion)
+
         self.btn_train = QPushButton("Entrenar modelo")
         self.btn_train.clicked.connect(self.train)
         layout.addWidget(self.btn_train)
@@ -137,6 +181,8 @@ class TrainTab(QWidget):
         self.cmb_model.currentIndexChanged.connect(self._on_model_changed)
         self.chk_tune.toggled.connect(self._toggle_tune_options)
         self.cmb_balancing.currentIndexChanged.connect(self._on_balancing_changed)
+        self.cmb_metodo_sel.currentIndexChanged.connect(self._on_metodo_sel_changed)
+        self.cmb_criterio_sel.currentIndexChanged.connect(self._on_criterio_sel_changed)
 
         self._refresh_families()
         self._refresh_models()
@@ -146,6 +192,7 @@ class TrainTab(QWidget):
     def refresh(self):
         self._reload_targets()
         self._refresh_balancing()
+        self._refresh_seleccion()
 
     def _reload_targets(self):
         anterior = self.state.target_column
@@ -188,6 +235,7 @@ class TrainTab(QWidget):
         self._refresh_families()
         self._refresh_models()
         self._refresh_balancing()
+        self._refresh_seleccion()
         self.config_changed.emit()
 
     # ------------------------------------------------------------------
@@ -374,6 +422,171 @@ class TrainTab(QWidget):
             config["k_neighbors"] = self.spn_vecinos.value()
         return config
 
+    # ------------------------------------------------------------------
+    # Selección de atributos
+    # ------------------------------------------------------------------
+    def _refresh_seleccion(self):
+        """Puebla el desplegable de métodos con los válidos para la tarea."""
+        task = self.cmb_task.currentData()
+        metodos = feature_selection.available_methods(task)
+        activo = bool(metodos) and self.cmb_target.count() > 0
+        self.gb_seleccion.setVisible(activo)
+        if not activo:
+            self.chk_seleccion.setChecked(False)
+            return
+
+        self.cmb_metodo_sel.blockSignals(True)
+        self.cmb_metodo_sel.clear()
+        for metodo in metodos:
+            self.cmb_metodo_sel.addItem(feature_selection.method_label(metodo), metodo)
+        self.cmb_metodo_sel.blockSignals(False)
+
+        # "ANOVA F" es el punto de partida: rápido y sin supuestos raros.
+        indice = self.cmb_metodo_sel.findData("anova")
+        if indice >= 0:
+            self.cmb_metodo_sel.setCurrentIndex(indice)
+        self._on_seleccion_toggled(self.chk_seleccion.isChecked())
+
+    def _on_seleccion_toggled(self, activo: bool):
+        """La casilla gobierna si el selector entra en el pipeline."""
+        self.cmb_metodo_sel.setEnabled(activo)
+        self.cmb_criterio_sel.setEnabled(activo)
+        self.btn_analizar.setEnabled(activo and self.cmb_target.count() > 0)
+        self._on_metodo_sel_changed()
+        self._guardar_seleccion_en_estado()
+
+    def _on_metodo_sel_changed(self):
+        """`embedded` no admite porcentaje: se avisa y no se ofrece."""
+        metodo = self.cmb_metodo_sel.currentData()
+        spec = feature_selection.SELECTION_METHODS.get(metodo)
+        admite = spec.supports_percentile if spec else False
+        porcentaje = self.cmb_criterio_sel.currentData() == "percentile"
+
+        indice_pct = self.cmb_criterio_sel.findData("percentile")
+        if not admite:
+            self.cmb_criterio_sel.model().item(indice_pct).setEnabled(False)
+            if porcentaje:
+                self.cmb_criterio_sel.setCurrentIndex(
+                    self.cmb_criterio_sel.findData("k")
+                )
+        else:
+            self.cmb_criterio_sel.model().item(indice_pct).setEnabled(True)
+
+        self.lbl_sel.setText(spec.docstring if spec else "")
+        self._on_criterio_sel_changed()
+        self._guardar_seleccion_en_estado()
+
+    def _on_criterio_sel_changed(self):
+        """El mismo spin box sirve para `k` (entero) y porcentaje (1-100)."""
+        spec = feature_selection.SELECTION_METHODS.get(
+            self.cmb_metodo_sel.currentData()
+        )
+        porcentaje = self.cmb_criterio_sel.currentData() == "percentile"
+        if porcentaje and spec is not None and not spec.supports_percentile:
+            # Si el porcentaje llega con un método que no lo admite, se vuelve a
+            # `k`: si no, el mismo número significaría cosas distintas.
+            self.cmb_criterio_sel.setCurrentIndex(self.cmb_criterio_sel.findData("k"))
+            return
+        self.spn_sel.setRange(1, 100 if porcentaje else 10000)
+        self.spn_sel.setValue(30 if porcentaje else 10)
+
+    def _guardar_seleccion_en_estado(self):
+        """Deja en `AppState` lo que el usuario haya elegido."""
+        config = self._selection_config()
+        self.state.selection_method = (config or {}).get("method")
+        self.state.selection_criteria = (
+            {clave: valor for clave, valor in config.items() if clave != "method"}
+            if config
+            else None
+        )
+
+    def _selection_config(self):
+        """Lo que espera `build_pipeline`, o `None` si no se selecciona."""
+        if not self.chk_seleccion.isChecked():
+            return None
+        metodo = self.cmb_metodo_sel.currentData()
+        spec = feature_selection.SELECTION_METHODS.get(metodo)
+        if not metodo or spec is None:
+            return None
+        # `embedded` no admite porcentaje: si llega de algún modo, se corta por
+        # número de atributos en lugar de dejar que `core` avise al entrenar.
+        admite_pct = spec.supports_percentile
+        if admite_pct and self.cmb_criterio_sel.currentData() == "percentile":
+            return {
+                "method": metodo,
+                "percentile": float(self.spn_sel.value()),
+            }
+        return {"method": metodo, "k": int(self.spn_sel.value())}
+
+    def analizar_seleccion(self):
+        """Ajusta el selector en un hilo aparte y pinta su tabla."""
+        config = self._selection_config()
+        if config is None:
+            QMessageBox.warning(
+                self, "Sin selección", "Marca la casilla para analizar la selección."
+            )
+            return
+        if self.cmb_model.currentData() is None:
+            QMessageBox.warning(self, "Sin modelo", "Elige un modelo válido.")
+            return
+
+        self.btn_analizar.setEnabled(False)
+        self.progress.setVisible(True)
+        self.lbl_sel.setText("Analizando la selección…")
+
+        worker = SelectionWorker(
+            df=self.state.clean_df,
+            target=self.cmb_target.currentText(),
+            model_name=self.cmb_model.currentData(),
+            task_type=self.cmb_task.currentData(),
+            selection=config,
+            casts=self.state.column_types or None,
+            normalizations=self.state.normalizations or None,
+        )
+        self._seleccion_thread = WorkerThread(worker, self)
+        worker.finished.connect(self._on_seleccion_lista)
+        worker.failed.connect(self._on_seleccion_fallida)
+        self._seleccion_thread.finished.connect(self._on_seleccion_terminada)
+        self._seleccion_thread.start()
+
+    def _on_seleccion_lista(self, tabla):
+        self._pintar_seleccion(tabla)
+
+    def _on_seleccion_fallida(self, mensaje):
+        self.progress.setVisible(False)
+        self.lbl_sel.setText("No se pudo analizar la selección.")
+        QMessageBox.critical(self, "Error al analizar la selección", mensaje)
+
+    def _on_seleccion_terminada(self):
+        self.progress.setVisible(False)
+        self.btn_analizar.setEnabled(self.chk_seleccion.isChecked())
+
+    def _pintar_seleccion(self, tabla):
+        """Rellena la tabla; lo no seleccionado se muestra atenuado."""
+        self.tbl_seleccion.setRowCount(len(tabla))
+        atenuado = QBrush(QColor(Qt.GlobalColor.gray))
+        normal = QBrush(QColor(Qt.GlobalColor.black))
+        for fila, datos in enumerate(tabla.itertuples(index=False)):
+            self.tbl_seleccion.setItem(fila, 0, QTableWidgetItem(str(datos.atributo)))
+            self.tbl_seleccion.setItem(
+                fila, 1, QTableWidgetItem(str(int(datos.n_columnas_codificadas)))
+            )
+            puntuacion = datos.puntuacion
+            texto = "n/d" if puntuacion != puntuacion else f"{puntuacion:.4f}"  # NaN
+            self.tbl_seleccion.setItem(fila, 2, QTableWidgetItem(texto))
+            self.tbl_seleccion.setItem(
+                fila, 3, QTableWidgetItem("Sí" if datos.seleccionado else "No")
+            )
+            for columna in range(4):
+                item = self.tbl_seleccion.item(fila, columna)
+                item.setForeground(normal if datos.seleccionado else atenuado)
+
+        self._guardar_seleccion_en_estado()
+        self.lbl_sel.setText(
+            f"{int(tabla['seleccionado'].sum())} de {len(tabla)} atributos "
+            "seleccionados."
+        )
+
     def _toggle_tune_options(self, enabled):
         for w in (self.cmb_search, self.spn_cv, self.spn_iter, self.cmb_metric):
             w.setEnabled(enabled)
@@ -398,6 +611,7 @@ class TrainTab(QWidget):
             "normalizations": self.state.normalizations or None,
         }
         balancing_config = self._balancing_config()
+        selection_config = self._selection_config()
         # Se guarda con qué se lanzó: al terminar se usan estos valores y no
         # los de los desplegables, que durante la búsqueda están bloqueados.
         self._run_context = {
@@ -405,6 +619,7 @@ class TrainTab(QWidget):
             "task": task,
             "model_name": model_name,
             "balancing": balancing_config,
+            "selection": selection_config,
         }
 
         if self.chk_tune.isChecked():
@@ -430,6 +645,7 @@ class TrainTab(QWidget):
                 n_iter=n_iter,
                 selections=self._selections(),
                 balancing=balancing_config,
+                selection=selection_config,
                 **transform,
             )
             self._thread = WorkerThread(worker, self)
@@ -447,6 +663,7 @@ class TrainTab(QWidget):
                     model_name,
                     task,
                     balancing=balancing_config,
+                    selection=selection_config,
                     **transform,
                 )
             except Exception as e:
@@ -524,8 +741,13 @@ class TrainTab(QWidget):
             self.cmb_model,
             self.gb_params,
             self.gb_tune,
+            self.chk_seleccion,
         ):
             widget.setEnabled(enabled)
+        if enabled:
+            # `_lock_controls(False)` no debe dejar la selección activa ni el
+            # análisis disponible: se restauran con la configuración actual.
+            self._on_seleccion_toggled(self.chk_seleccion.isChecked())
 
     def _store_result(self, pipe, metrics, test_data, cv_results):
         contexto = self._run_context or {}

@@ -32,6 +32,7 @@ class TuneWorker(QObject):
         casts=None,
         normalizations=None,
         balancing=None,
+        selection=None,
     ):
         super().__init__()
         self._kwargs = dict(
@@ -47,6 +48,7 @@ class TuneWorker(QObject):
             casts=casts,
             normalizations=normalizations,
             balancing=balancing,
+            selection=selection,
         )
 
     def run(self):
@@ -89,3 +91,43 @@ class WorkerThread(QThread):
     @property
     def worker(self) -> TuneWorker:
         return self._worker
+
+
+class SelectionWorker(QObject):
+    """Ejecuta el análisis de selección en un hilo aparte.
+
+    Ajustar el selector puede tardar (el método embebido entrena un bosque por
+    dentro), así que no puede bloquear la interfaz. Solo orquesta: la lógica
+    está en `core.model_trainer.analyze_selection`.
+    """
+
+    finished = Signal(object)  # DataFrame de la selección
+    failed = Signal(str)
+
+    def __init__(
+        self,
+        df,
+        target,
+        model_name,
+        task_type,
+        selection=None,
+        casts=None,
+        normalizations=None,
+    ):
+        super().__init__()
+        self._kwargs = dict(
+            df=df,
+            target=target,
+            model_name=model_name,
+            task_type=task_type,
+            selection=selection,
+            casts=casts,
+            normalizations=normalizations,
+        )
+
+    def run(self):
+        try:
+            tabla = model_trainer.analyze_selection(**self._kwargs)
+            self.finished.emit(tabla)
+        except Exception as e:  # noqa: BLE001 - el mensaje va a la interfaz
+            self.failed.emit(str(e))

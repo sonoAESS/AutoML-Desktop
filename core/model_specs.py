@@ -44,6 +44,10 @@ MIN_ROWS = {"svm": 50, "vecinos": 30}
 
 ALL_VALUES = "todos"
 
+#: Marca "el usuario no ha tocado este parámetro": se usa el dominio
+#: completo. Permite distinguir de un `None` elegido explícitamente.
+SIN_SELECCION = object()
+
 
 @dataclass(frozen=True)
 class ParamSpec:
@@ -67,9 +71,14 @@ class ParamSpec:
             return "no"
         return str(value)
 
-    def as_grid(self, selection: Any = None) -> dict:
-        """Devuelve el trozo de grid correspondiente a la selección."""
-        if selection is None or selection == ALL_VALUES:
+    def as_grid(self, selection: Any = SIN_SELECCION) -> dict:
+        """Devuelve el trozo de grid correspondiente a la selección.
+
+        `SIN_SELECCION` y `ALL_VALUES` usan el dominio completo. Cualquier
+        otro valor se toma literal, incluido `None`: `max_depth=None` es una
+        decisión del usuario ("sin límite"), no una ausencia de selección.
+        """
+        if selection is SIN_SELECCION or selection == ALL_VALUES:
             values = list(self.values)
         elif isinstance(selection, (list, tuple)):
             values = list(selection)
@@ -105,7 +114,11 @@ class ModelSpec:
         selections = selections or {}
         grid = {}
         for spec in self.params:
-            grid.update(spec.as_grid(selections.get(spec.name)))
+            seleccion = (
+                selections[spec.name]
+                if spec.name in selections else SIN_SELECCION
+            )
+            grid.update(spec.as_grid(seleccion))
         return grid
 
 

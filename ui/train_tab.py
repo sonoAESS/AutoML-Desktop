@@ -1,5 +1,5 @@
 # ui/train_tab.py
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QFormLayout, QComboBox, QPushButton, QLabel,
     QMessageBox, QCheckBox, QSpinBox, QProgressBar, QGroupBox, QGridLayout,
@@ -21,7 +21,16 @@ class TrainTab(QWidget):
         self.state = state
         self._thread = None
         self._param_widgets = {}
+        self._run_context = None      # ajustes con los que se lanzó la búsqueda
+        self._elapsed = 0
+        self._status = ""
+        self._done = 0
+        self._total = 0
+        self._fallo = False
         self._build_ui()
+        self._timer = QTimer(self)
+        self._timer.setInterval(1000)
+        self._timer.timeout.connect(self._on_tick)
 
     # ------------------------------------------------------------------
     def _build_ui(self):
@@ -53,6 +62,7 @@ class TrainTab(QWidget):
         gb_params = QGroupBox("Hiperparámetros del modelo")
         grid = QGridLayout(gb_params)
         self.grid_params = grid
+        self.gb_params = gb_params
         layout.addWidget(gb_params)
 
         gb_tune = QGroupBox("Búsqueda de hiperparámetros")
@@ -72,6 +82,7 @@ class TrainTab(QWidget):
         form_tune.addRow("Folds (validación cruzada):", self.spn_cv)
         form_tune.addRow("Iteraciones (si es aleatoria):", self.spn_iter)
         form_tune.addRow("Métrica a optimizar:", self.cmb_metric)
+        self.gb_tune = gb_tune
         layout.addWidget(gb_tune)
 
         self.btn_train = QPushButton("Entrenar modelo")
@@ -79,9 +90,16 @@ class TrainTab(QWidget):
         layout.addWidget(self.btn_train)
 
         self.progress = QProgressBar()
-        self.progress.setRange(0, 0)
+        self.progress.setRange(0, 0)      # modo "ocupado": no hay porcentaje
+        self.progress.setFormat("Trabajando…")
         self.progress.hide()
         layout.addWidget(self.progress)
+
+        # Estado de la búsqueda: qué está pasando y cuánto lleva. No se
+        # sobrescribe con las métricas, eso es cosa de `lbl_result`.
+        self.lbl_status = QLabel("")
+        self.lbl_status.setWordWrap(True)
+        layout.addWidget(self.lbl_status)
 
         self.lbl_result = QLabel("")
         self.lbl_result.setWordWrap(True)
@@ -295,26 +313,38 @@ class TrainTab(QWidget):
             "casts": self.state.column_types or None,
             "normalizations": self.state.normalizations or None,
         }
+        # Se guarda con qué se lanzó: al terminar se usan estos valores y no
+        # los de los desplegables, que durante la búsqueda están bloqueados.
+        self._run_context = {
+            "target": target, "task": task, "model_name": model_name,
+        }
 
         if self.chk_tune.isChecked():
+            search_type = self.cmb_search.currentData()
+            cv = self.spn_cv.value()
+            n_iter = self.spn_iter.value()
+            combos, ajustes = model_trainer.search_size(
+                model_name, task, self._selections(),
+                search_type=search_type, cv=cv, n_iter=n_iter,
+            )
             worker = TuneWorker(
                 df=self.state.clean_df,
                 target=target,
                 model_name=model_name,
                 task_type=task,
-                search_type=self.cmb_search.currentData(),
+                search_type=search_type,
                 metric=self.cmb_metric.currentText(),
-                cv=self.spn_cv.value(),
-                n_iter=self.spn_iter.value(),
+                cv=cv,
+                n_iter=n_iter,
                 selections=self._selections(),
                 **transform,
             )
             self._thread = WorkerThread(worker, self)
             worker.finished.connect(self._on_finished)
             worker.failed.connect(self._on_failed)
-            worker.progress.connect(self.lbl_result.setText)
+            worker.progress.connect(self._on_progress)
             self._thread.finished.connect(self._on_thread_done)
-            self._set_busy(True)
+            self._set_busy(True, total=ajustes, combos=combos)
             self._thread.start()
         else:
             try:
@@ -325,30 +355,90 @@ class TrainTab(QWidget):
                 QMessageBox.critical(self, "Error al entrenar", str(e))
                 return
             self._store_result(pipe, metrics, test_data, {})
+            self.lbl_status.setText("Entrenamiento completado.")
 
     # ------------------------------------------------------------------
+    def _on_progress(self, etapa, actual, total):
+        """Etapas que van llegando desde el hilo de la búsqueda."""
+        self._status = etapa
+        self._total = total or self._total
+        self._done = actual
+        self._update_status()
+
+    def _on_tick(self):
+        """Cada segundo: cuenta el tiempo transcurrido."""
+        self._elapsed += 1
+        self._update_status()
+
+    def _update_status(self):
+        partes = [self._status]
+        if self._total:
+            partes.append(f"{self._done}/{self._total} ajustes")
+        if self._elapsed:
+            partes.append(f"{self._elapsed} s")
+        self.lbl_status.setText(" · ".join(p for p in partes if p))
+
     def _on_finished(self, pipe, metrics, test_data, cv_results):
         self._store_result(pipe, metrics, test_data, cv_results)
 
     def _on_failed(self, message):
-        QMessageBox.critical(self, "Error al buscar hiperparámetros", message)
+        self._fallo = True
         self._set_busy(False)
+        self.lbl_status.setText(f"Búsqueda fallida: {message}")
+        QMessageBox.critical(self, "Error al buscar hiperparámetros", message)
 
     def _on_thread_done(self):
         self._set_busy(False)
         self._thread = None
+        if not self._fallo:
+            tiempo = (
+                f"en {self._elapsed} s"
+                if self._elapsed else "en menos de 1 s"
+            )
+            self.lbl_status.setText(
+                f"Búsqueda terminada {tiempo}. "
+                "Los mejores parámetros están arriba."
+            )
+        self._fallo = False
 
-    def _set_busy(self, busy: bool):
+    def _set_busy(self, busy: bool, total: int = 0, combos: int = 0):
+        """Muestra u oculta el indicador y bloquea los controles mientras tanto."""
         self.btn_train.setEnabled(not busy)
         self.progress.setVisible(busy)
+        self._lock_controls(not busy)
+
+        if busy:
+            self._elapsed = 0
+            self._done = 0
+            self._total = total
+            self._status = (
+                f"Buscando: {combos} combinaciones, {total} ajustes"
+                if combos else "Buscando la mejor configuración"
+            )
+            self._update_status()
+            self._timer.start()
+        else:
+            self._timer.stop()
+
+    def _lock_controls(self, enabled: bool):
+        """Impide cambiar la configuración mientras dura la búsqueda."""
+        for widget in (self.cmb_target, self.cmb_task,
+                       self.cmb_family, self.cmb_model,
+                       self.gb_params, self.gb_tune):
+            widget.setEnabled(enabled)
 
     def _store_result(self, pipe, metrics, test_data, cv_results):
+        contexto = self._run_context or {}
         self.state.pipeline = pipe
         self.state.trained_model = pipe
         self.state.metrics = metrics
-        self.state.task_type = self.cmb_task.currentData()
-        self.state.target_column = self.cmb_target.currentText()
-        self.state.model_name = self.cmb_model.currentData()
+        self.state.task_type = contexto.get("task", self.cmb_task.currentData())
+        self.state.target_column = contexto.get(
+            "target", self.cmb_target.currentText()
+        )
+        self.state.model_name = contexto.get(
+            "model_name", self.cmb_model.currentData()
+        )
         self.state._test_data = test_data
         self.state._cv_results = cv_results
 

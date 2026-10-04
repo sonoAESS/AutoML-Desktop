@@ -43,6 +43,42 @@ def search_grid(model_name, task_type, selections=None):
     return model_specs.get_spec(model_name, task_type).grid(selections)
 
 
+def search_size(
+    model_name,
+    task_type,
+    selections=None,
+    search_type="grid",
+    cv=5,
+    n_iter=20,
+):
+    """Cuántas combinaciones y cuántos ajustes hará una búsqueda.
+
+    Parámetros
+    ----------
+    selections : dict | None
+        Valores elegidos en la interfaz para cada hiperparámetro.
+    search_type : {"grid", "random"}
+        Estrategia de búsqueda.
+    cv : int
+        Folds de validación cruzada.
+    n_iter : int
+        Iteraciones pedidas si `search_type == "random"`.
+
+    Devuelve
+    --------
+    (n_combos, n_ajustes) : tuple[int, int]
+        El número de ajustes es el de modelos que se entrenarán de verdad:
+        combinaciones por folds (limitado por `n_iter` en la aleatoria).
+    """
+    param_grid = search_grid(model_name, task_type, selections)
+    if not param_grid:
+        return 0, 0
+    combos = _grid_size(param_grid)
+    if search_type == "random":
+        combos = min(n_iter, combos)
+    return combos, combos * max(int(cv), 1)
+
+
 def available_metrics(task_type, model_name=None):
     """Métricas de scoring compatibles con la tarea y el modelo."""
     return model_specs.available_metrics(task_type, model_name)
@@ -203,6 +239,10 @@ def _resolve_roc_auc(model, y) -> str:
     return "roc_auc"
 
 
+def _sin_informar(etapa, actual, total):
+    """Callback por defecto: descarta los avisos de progreso."""
+
+
 def tune_model(
     df,
     target,
@@ -238,8 +278,10 @@ def tune_model(
     normalizations : dict | None
         Normalización por columna, `{columna: método}`.
     progress_callback : callable | None
-        Función que se invoca con (combinación_actual, total) si el
-        backend lo permite. Se usa desde la UI para reportar progreso.
+        Función que se invoca con `(etapa, actual, total)` en cada paso
+        relevante: antes de explorar, al reentrenar y al calcular métricas.
+        Se usa desde la UI para reportar progreso. Si el modelo no tiene
+        espacio de búsqueda solo se avisa del entrenamiento simple.
 
     Devuelve
     --------
@@ -247,6 +289,9 @@ def tune_model(
     """
     X = df.drop(columns=[target])
     y = df[target]
+
+    reportar = progress_callback or _sin_informar
+    reportar("Preparando los datos y el pipeline…", 0, 0)
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state,
@@ -263,7 +308,16 @@ def tune_model(
         pipe.fit(X_train, y_train)
         y_pred = pipe.predict(X_test)
         metrics = _compute_metrics(task_type, y_test, y_pred)
+        reportar("Entrenando el modelo…", 1, 1)
         return pipe, metrics, (X_test, y_test, y_pred), {}
+
+    combos, ajustes = search_size(
+        model_name, task_type, selections,
+        search_type=search_type, cv=cv, n_iter=n_iter,
+    )
+    reportar(
+        f"Explorando {combos} combinaciones ({ajustes} ajustes)…", 0, ajustes
+    )
 
     scoring = _scoring_for(task_type, metric)
     if scoring == "roc_auc":
@@ -293,9 +347,11 @@ def tune_model(
         )
 
     search.fit(X_train, y_train)
+    reportar("Refinando la mejor configuración…", ajustes, ajustes)
 
     best_pipe = search.best_estimator_
     y_pred = best_pipe.predict(X_test)
+    reportar("Calculando las métricas finales…", ajustes, ajustes)
 
     metrics = _compute_metrics(
         task_type=task_type,

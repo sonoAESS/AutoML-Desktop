@@ -97,3 +97,13 @@ def test_get_spec_por_defecto_busca_en_ambas_tareas():
     assert model_specs.get_spec("KNN").task_type == "classification"
     with pytest.raises(KeyError):
         model_specs.get_spec("No existe")
+
+def test_none_es_un_valor_elegido_y_no_el_dominio_completo():
+    """Elegir «ninguno» en max_depth debe buscar solo ese valor."""
+    spec = model_specs.get_spec("Árbol de Decisión", "classification")
+    grid = spec.grid({"max_depth": None})
+    assert grid["model__max_depth"] == [None]
+
+    ausente = spec.grid({"min_samples_split": 5})
+    assert ausente["model__max_depth"] == list(spec.param("max_depth").values)
+    assert ausente["model__min_samples_split"] == [5]

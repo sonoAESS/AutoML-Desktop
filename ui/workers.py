@@ -5,11 +5,16 @@ from core import model_trainer
 
 
 class TuneWorker(QObject):
-    """Ejecuta tune_model en un hilo aparte y reporta resultados."""
+    """Ejecuta tune_model en un hilo aparte y reporta resultados.
+
+    Las señales cruzan de este hilo al de la interfaz de forma encolada, así
+    que `progress` puede invocarse desde dentro de `tune_model` sin cuidado.
+    """
 
     finished = Signal(object, dict, tuple, object)   # pipe, metrics, test_data, cv_results
     failed = Signal(str)
-    progress = Signal(str)                            # mensajes de estado
+    # Etapa actual, ajustes completados y ajustes totales (0 = sin total).
+    progress = Signal(str, int, int)
 
     def __init__(self, df, target, model_name, task_type,
                  search_type, metric, cv, n_iter,
@@ -24,23 +29,38 @@ class TuneWorker(QObject):
 
     def run(self):
         try:
-            self.progress.emit("Entrenando y buscando hiperparámetros…")
+            self.progress.emit(
+                "Explorando hiperparámetros…", 0, 0,
+            )
             pipe, metrics, test_data, cv_results = model_trainer.tune_model(
-                **self._kwargs
+                progress_callback=self._reportar,
+                **self._kwargs,
             )
             self.finished.emit(pipe, metrics, test_data, cv_results)
         except Exception as e:
             self.failed.emit(str(e))
 
+    def _reportar(self, etapa, actual, total):
+        """Callback que usa `tune_model` para ir informando."""
+        self.progress.emit(etapa, actual, total)
+
 
 class WorkerThread(QThread):
-    """QThread reutilizable que ejecuta un TuneWorker."""
+    """QThread que ejecuta un `TuneWorker` una vez y termina.
+
+    Se sobrescribe `run()` a propósito: si no, la implementación por defecto
+    de `QThread` abre un event loop y el hilo nunca termina, con lo que la
+    señal `finished` no llegaría nunca y la interfaz se quedaría bloqueada
+    aunque el modelo ya esté entrenado.
+    """
 
     def __init__(self, worker: TuneWorker, parent=None):
         super().__init__(parent)
         self._worker = worker
         worker.moveToThread(self)
-        self.started.connect(worker.run)
+
+    def run(self):
+        self._worker.run()
 
     @property
     def worker(self) -> TuneWorker:

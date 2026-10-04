@@ -133,7 +133,11 @@ Se abrirá la ventana principal con las cinco pestañas del flujo de trabajo.
    cambiarlos. Elige la familia y el modelo: solo aparecen los compatibles
    con tus datos, y el panel muestra los hiperparámetros propios de ese
    modelo. Activa *Buscar mejores hiperparámetros* para afinarlo en segundo
-   plano y pulsa *Entrenar modelo*.
+   plano y pulsa *Entrenar modelo*. Mientras busca, una barra animada indica
+   que está trabajando, el texto de estado dice cuántas combinaciones y
+   ajustes faltan y cuánto lleva, y los controles quedan bloqueados para no
+   cambiar nada a medias. Al acabar verás *Búsqueda terminada en N s* (o
+   *Búsqueda fallida*) y las métricas con los mejores parámetros.
 4. **Resultados** — Revisa las métricas y el gráfico generado. Guarda el
    proyecto con *Guardar modelo y dataset (.automl)*: ese archivo contiene el
    modelo, sus metadatos y el dataset ya transformado. Con *Exportar solo el

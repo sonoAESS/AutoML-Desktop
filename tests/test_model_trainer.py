@@ -1,7 +1,7 @@
 # tests/test_model_trainer.py
 import pandas as pd
 from sklearn.datasets import load_iris
-from core import model_trainer
+from core import model_specs, model_trainer
 
 
 def test_tune_random_forest_iris():
@@ -125,3 +125,122 @@ def test_el_pipeline_predice_sobre_datos_crudos():
     )
     nuevos = pd.DataFrame({"importe": ["999999"], "ciudad": ["a"]})
     assert len(pipe.predict(nuevos)) == 1
+
+
+def test_search_size_cuenta_combinaciones_y_ajustes():
+    combos, ajustes = model_trainer.search_size(
+        "Random Forest", "classification", cv=5,
+    )
+    grid = model_trainer.search_grid("Random Forest", "classification")
+    assert combos == model_trainer._grid_size(grid)
+    assert ajustes == combos * 5
+    assert combos > 1
+
+
+def test_search_size_respeta_las_selecciones():
+    combos, _ = model_trainer.search_size(
+        "Random Forest", "classification",
+        selections={"max_depth": [3, 5, 7], "min_samples_split": 2},
+    )
+    grid = model_trainer.search_grid(
+        "Random Forest", "classification",
+        selections={"max_depth": [3, 5, 7], "min_samples_split": 2},
+    )
+    assert combos == model_trainer._grid_size(grid)
+
+
+def test_search_size_limita_las_iteraciones_de_la_busqueda_aleatoria():
+    combos, ajustes = model_trainer.search_size(
+        "Random Forest", "classification", search_type="random", cv=3, n_iter=7,
+    )
+    assert combos == 7
+    assert ajustes == 21
+
+    specs = model_specs.get_spec("Random Forest", "classification")
+    fijados = {p.name: p.values[0] for p in specs.params}
+    fijados["max_depth"] = [1, 2]
+
+    combos, ajustes = model_trainer.search_size(
+        "Random Forest", "classification", selections=fijados,
+        search_type="random", cv=3, n_iter=50,
+    )
+    assert combos == 2
+    assert ajustes == 6
+
+
+def test_search_size_con_un_solo_valor_por_parametro():
+    specs = model_specs.get_spec("Random Forest", "classification")
+    fijados = {p.name: p.values[0] for p in specs.params}
+    assert model_trainer.search_size(
+        "Random Forest", "classification", selections=fijados, cv=4,
+    ) == (1, 4)
+
+
+def test_search_size_sin_parametros_devuelve_cero():
+    specs = model_specs.get_spec("Random Forest", "classification")
+    sin_parametros = model_specs.ModelSpec(
+        name=specs.name, family=specs.family, task_type=specs.task_type,
+        factory=specs.factory,
+    )
+    original = model_specs.SPECS["classification"]["Random Forest"]
+    model_specs.SPECS["classification"]["Random Forest"] = sin_parametros
+    try:
+        assert model_trainer.search_size(
+            "Random Forest", "classification",
+        ) == (0, 0)
+    finally:
+        model_specs.SPECS["classification"]["Random Forest"] = original
+
+
+def test_tune_model_sin_espacio_de_busqueda_entrena_directo(monkeypatch):
+    monkeypatch.setattr(model_trainer, "search_grid", lambda *a, **k: {})
+    df = pd.DataFrame({
+        "a": list(range(10)),
+        "y": [0, 1] * 5,
+    })
+    etapas = []
+    pipe, metrics, test_data, cv_results = model_trainer.tune_model(
+        df, target="y", model_name="Random Forest",
+        task_type="classification", cv=2,
+        progress_callback=lambda e, a, t: etapas.append(e),
+    )
+    assert cv_results == {}
+    assert "accuracy" in metrics
+    assert etapas == ["Preparando los datos y el pipeline…", "Entrenando el modelo…"]
+
+
+def test_tune_model_informa_de_las_etapas():
+    eventos = []
+    df = pd.DataFrame({
+        "a": list(range(10)),
+        "b": [1.0, 0.0] * 5,
+        "y": [0, 1] * 5,
+    })
+    model_trainer.tune_model(
+        df, target="y", model_name="Árbol de Decisión",
+        task_type="classification", search_type="random", cv=2, n_iter=3,
+        progress_callback=lambda etapa, actual, total: eventos.append(
+            (etapa, actual, total)
+        ),
+    )
+    textos = [etapa for etapa, _, _ in eventos]
+    assert any("Explorando" in t for t in textos)
+    assert any("métricas finales" in t for t in textos)
+
+    total = eventos[[i for i, t in enumerate(textos)
+                     if "Explorando" in t][0]][2]
+    assert total == 6  # 3 combinaciones x 2 folds
+    assert eventos[0][1] == 0
+
+
+def test_tune_model_sin_callback_no_falla():
+    df = pd.DataFrame({
+        "a": list(range(10)),
+        "y": [0, 1] * 5,
+    })
+    pipe, metrics, _, _ = model_trainer.tune_model(
+        df, target="y", model_name="Árbol de Decisión",
+        task_type="classification", cv=2,
+        progress_callback=None,
+    )
+    assert "accuracy" in metrics

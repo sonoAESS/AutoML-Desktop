@@ -6,13 +6,15 @@ from ui.data_tab import DataTab
 from ui.predict_tab import PredictTab
 from ui.preprocess_tab import PreprocessTab
 from ui.results_tab import ResultsTab
+from ui.theme import NOMBRE_APP, icono_app
 from ui.train_tab import TrainTab
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AutoML Desktop")
+        self.setWindowTitle(NOMBRE_APP)
+        self.setWindowIcon(icono_app())
         self.resize(1180, 820)
 
         self.state = AppState()

@@ -66,16 +66,15 @@ class ResultsTab(QWidget):
         joblib.dump(self.state.trained_model, path)
         QMessageBox.information(self, "Guardado", f"Modelo guardado en:\n{path}")
 
-
-def _plot_cv_results(self, ax):
-    cv = getattr(self.state, "_cv_results", None)
-    if not cv:
-        return False
-    scores = cv.get("mean_test_score")
-    if scores is None:
-        return False
-    ax.plot(range(1, len(scores) + 1), scores, marker="o")
-    ax.set_xlabel("Combinación")
-    ax.set_ylabel("Score CV")
-    ax.set_title("Resultados de la búsqueda de hiperparámetros")
-    return True
+    def _plot_cv_results(self, ax):
+        cv = getattr(self.state, "_cv_results", None)
+        if not cv:
+            return False
+        scores = cv.get("mean_test_score")
+        if scores is None:
+            return False
+        ax.plot(range(1, len(scores) + 1), scores, marker="o")
+        ax.set_xlabel("Combinación")
+        ax.set_ylabel("Score CV")
+        ax.set_title("Resultados de la búsqueda de hiperparámetros")
+        return True

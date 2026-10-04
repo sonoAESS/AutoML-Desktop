@@ -12,12 +12,14 @@ class TuneWorker(QObject):
     progress = Signal(str)                            # mensajes de estado
 
     def __init__(self, df, target, model_name, task_type,
-                 search_type, metric, cv, n_iter):
+                 search_type, metric, cv, n_iter,
+                 selections=None, casts=None, normalizations=None):
         super().__init__()
         self._kwargs = dict(
             df=df, target=target, model_name=model_name,
             task_type=task_type, search_type=search_type,
             metric=metric, cv=cv, n_iter=n_iter,
+            selections=selections, casts=casts, normalizations=normalizations,
         )
 
     def run(self):

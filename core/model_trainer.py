@@ -1,81 +1,55 @@
 # core/model_trainer.py
+"""Construcción de pipelines, entrenamiento y métricas.
+
+El catálogo de modelos vive en `core.model_specs`; aquí solo se assemblan los
+pipelines, se entrena y se calculan las métricas.
+"""
+from __future__ import annotations
+
 import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.impute import SimpleImputer
-
-from sklearn.model_selection import GridSearchCV, RandomizedSearchCV
-
-from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-from sklearn.svm import SVC, SVR
-from sklearn.neighbors import KNeighborsClassifier, KNeighborsRegressor
 from sklearn.metrics import (
-    accuracy_score, f1_score, roc_auc_score,
-    mean_squared_error, mean_absolute_error, r2_score,
+    accuracy_score, f1_score, mean_absolute_error, mean_squared_error,
+    r2_score, roc_auc_score,
 )
+from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
+from core import model_specs
+from core.model_specs import CLASSIFICATION, REGRESSION
+
+#: Modelos por tarea (instancias de referência, se mantienen por compatibilidad).
 CLASSIFIERS = {
-    "Regresión Logística": LogisticRegression(max_iter=1000),
-    "Árbol de Decisión": DecisionTreeClassifier(random_state=42),
-    "Random Forest": RandomForestClassifier(n_estimators=200, random_state=42),
-    "SVM": SVC(probability=True, random_state=42),
-    "KNN": KNeighborsClassifier(),
+    name: spec.build() for name, spec in model_specs.CLASSIFICATION_SPECS.items()
 }
-
 REGRESSORS = {
-    "Regresión Lineal": LinearRegression(),
-    "Ridge": Ridge(),
-    "Árbol de Decisión": DecisionTreeRegressor(random_state=42),
-    "Random Forest": RandomForestRegressor(n_estimators=200, random_state=42),
-    "SVR": SVR(),
-    "KNN": KNeighborsRegressor(),
+    name: spec.build() for name, spec in model_specs.REGRESSION_SPECS.items()
 }
 
+#: Espacio de búsqueda por defecto de cada modelo.
 PARAM_GRIDS = {
-    # --- Clasificación ---
-    "Regresión Logística": {
-        "model__C": [0.01, 0.1, 1.0, 10.0],
-        "model__class_weight": [None, "balanced"],
-    },
-    "Árbol de Decisión": {
-        "model__max_depth": [None, 5, 10, 20, 30],
-        "model__min_samples_split": [2, 5, 10],
-        "model__min_samples_leaf": [1, 2, 4],
-    },
-    "Random Forest": {
-        "model__n_estimators": [100, 200, 400],
-        "model__max_depth": [None, 10, 20, 30],
-        "model__min_samples_split": [2, 5, 10],
-        "model__max_features": ["sqrt", "log2"],
-    },
-    "SVM": {
-        "model__C": [0.1, 1.0, 10.0],
-        "model__kernel": ["rbf", "linear"],
-        "model__gamma": ["scale", "auto"],
-    },
-    "KNN": {
-        "model__n_neighbors": [3, 5, 7, 11, 15],
-        "model__weights": ["uniform", "distance"],
-        "model__p": [1, 2],
-    },
-    # --- Regresión ---
-    "Regresión Lineal": {
-        "model__fit_intercept": [True, False],
-    },
-    "Ridge": {
-        "model__alpha": [0.1, 1.0, 10.0, 100.0],
-        "model__fit_intercept": [True, False],
-    },
-    "SVR": {
-        "model__C": [0.1, 1.0, 10.0],
-        "model__kernel": ["rbf", "linear"],
-        "model__epsilon": [0.01, 0.1, 0.5],
-    },
+    name: spec.grid() for name, spec in model_specs.iter_specs()
 }
+
+
+def search_grid(model_name, task_type, selections=None):
+    """Grid de búsqueda de un modelo según lo elegido en la interfaz."""
+    return model_specs.get_spec(model_name, task_type).grid(selections)
+
+
+def available_metrics(task_type, model_name=None):
+    """Métricas de scoring compatibles con la tarea y el modelo."""
+    return model_specs.available_metrics(task_type, model_name)
+
+
+def compatible_models(task_type, profiles, target=None, n_rows=None):
+    """Modelos usables con los datos described en `profiles`."""
+    return model_specs.evaluate_compatibility(
+        task_type, profiles, target=target, n_rows=n_rows
+    )
+
 
 def build_preprocessor(X):
     num_cols = X.select_dtypes("number").columns.tolist()
@@ -94,7 +68,15 @@ def build_preprocessor(X):
         ("cat", cat_pipe, cat_cols),
     ])
 
-# core/model_trainer.py
+
+def build_pipeline(df, model_name, task_type, target):
+    """Construye el pipeline (preprocesamiento + modelo) sin entrenarlo."""
+    X = df.drop(columns=[target])
+    return Pipeline([
+        ("preprocessor", build_preprocessor(X)),
+        ("model", model_specs.build_estimator(model_name, task_type)),
+    ])
+
 
 def train_model(df, target, model_name, task_type, test_size=0.2, random_state=42):
     """Entrena un modelo sin búsqueda de hiperparámetros.
@@ -113,14 +95,10 @@ def train_model(df, target, model_name, task_type, test_size=0.2, random_state=4
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state,
-        stratify=y if task_type == "classification" else None,
+        stratify=y if task_type == CLASSIFICATION else None,
     )
 
-    model = (CLASSIFIERS if task_type == "classification" else REGRESSORS)[model_name]
-    pipe = Pipeline([
-        ("preprocessor", build_preprocessor(X_train)),
-        ("model", model),
-    ])
+    pipe = build_pipeline(df, model_name, task_type, target)
     pipe.fit(X_train, y_train)
     y_pred = pipe.predict(X_test)
 
@@ -176,6 +154,7 @@ def tune_model(
     n_iter=20,
     test_size=0.2,
     random_state=42,
+    selections=None,
     progress_callback=None,
 ):
     """Entrena un modelo con búsqueda de hiperparámetros.
@@ -189,6 +168,9 @@ def tune_model(
         Número de folds de validación cruzada.
     n_iter : int
         Número de combinaciones a probar si search_type == "random".
+    selections : dict | None
+        Valores elegidos en la interfaz para cada hiperparámetro. Los que no
+        aparecen se explorarían en su dominio completo.
     progress_callback : callable | None
         Función que se invoca con (combinación_actual, total) si el
         backend lo permite. Se usa desde la UI para reportar progreso.
@@ -202,16 +184,16 @@ def tune_model(
 
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=test_size, random_state=random_state,
-        stratify=y if task_type == "classification" else None,
+        stratify=y if task_type == CLASSIFICATION else None,
     )
 
-    base_model = (CLASSIFIERS if task_type == "classification" else REGRESSORS)[model_name]
+    base_model = model_specs.build_estimator(model_name, task_type)
     pipe = Pipeline([
         ("preprocessor", build_preprocessor(X_train)),
         ("model", base_model),
     ])
 
-    param_grid = PARAM_GRIDS.get(model_name, {})
+    param_grid = search_grid(model_name, task_type, selections)
     if not param_grid:
         # Sin espacio de búsqueda: entrenamiento normal.
         pipe.fit(X_train, y_train)

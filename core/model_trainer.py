@@ -20,9 +20,9 @@ from sklearn.metrics import (
 )
 from sklearn.model_selection import GridSearchCV, RandomizedSearchCV, train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder, StandardScaler
 
-from core import model_specs
+from core import feature_selection, model_specs
 from core.model_specs import CLASSIFICATION, REGRESSION
 from core.preprocessor import (
     ColumnNormalizer,
@@ -141,6 +141,7 @@ def build_pipeline(
     casts=None,
     normalizations=None,
     balancing=None,
+    selection=None,
 ):
     """Construye el pipeline (tipos + normalización + preprocesado + modelo).
 
@@ -151,6 +152,12 @@ def build_pipeline(
     Con `balancing` de remuestreo el pipeline pasa a ser de `imblearn`: es el
     único que propaga el `y` ajustado hasta el modelo. `class_weight` no añade
     ningún paso, solo fija el parámetro del estimador.
+
+    Con `selection` se añade el paso `selector` entre el preprocesado y el
+    modelo. El orden canónico es `preprocessor → [scaler] → [balancer] →
+    selector → modelo`: seleccionar antes de balancear descartaría columnas
+    Minoritarias que el remuestreo podría haber_created. `chi2` exige valores no
+    negativos, así que para ese método se antepone un `MinMaxScaler`.
     """
     X = df.drop(columns=[target])
     steps = []
@@ -159,6 +166,10 @@ def build_pipeline(
     if normalizations:
         steps.append(("normalizer", ColumnNormalizer(normalizations)))
     steps.append(("preprocessor", build_preprocessor(X)))
+
+    metodo_seleccion = (selection or {}).get("method")
+    if metodo_seleccion == "chi2":
+        steps.append(("scaler_nonneg", MinMaxScaler()))
 
     metodo = (balancing or {}).get("method")
     if metodo and metodo not in ("none", "class_weight"):
@@ -182,6 +193,21 @@ def build_pipeline(
                     random_state=balancing.get("random_state", 42),
                     task_type=task_type,
                     categorical_features=categoricas,
+                ),
+            )
+        )
+
+    if metodo_seleccion and metodo_seleccion != "none":
+        steps.append(
+            (
+                "selector",
+                feature_selection.build_selector(
+                    method=metodo_seleccion,
+                    task_type=task_type,
+                    k=(selection or {}).get("k"),
+                    percentile=(selection or {}).get("percentile"),
+                    random_state=(selection or {}).get("random_state", 42),
+                    n_estimators=(selection or {}).get("n_estimators", 100),
                 ),
             )
         )
@@ -245,6 +271,7 @@ def train_model(
     casts=None,
     normalizations=None,
     balancing=None,
+    selection=None,
 ):
     """Entrena un modelo sin búsqueda de hiperparámetros.
 
@@ -256,6 +283,8 @@ def train_model(
         Normalización por columna, `{columna: método}`.
     balancing : dict | None
         Estrategia de balanceo, `{method, k_neighbors, random_state}`.
+    selection : dict | None
+        Selección de atributos, `{method, k, percentile}`.
 
     Devuelve
     --------
@@ -285,6 +314,7 @@ def train_model(
         casts=casts,
         normalizations=normalizations,
         balancing=balancing,
+        selection=selection,
     )
     pipe.fit(X_train, y_train)
     y_pred = pipe.predict(X_test)
@@ -335,6 +365,74 @@ def _sin_informar(etapa, actual, total):
     """Callback por defecto: descarta los avisos de progreso."""
 
 
+def analyze_selection(
+    df,
+    target,
+    model_name,
+    task_type,
+    casts=None,
+    normalizations=None,
+    selection=None,
+    test_size=0.2,
+    random_state=42,
+):
+    """Ajusta el selector sobre una partición de entrenamiento y dice qué se queda.
+
+    No entrena el modelo final: solo sirve para que el usuario vea qué atributos
+    sobreviven y con qué puntuación **antes** de decidir. El selector se ajusta
+    sobre la parte de entrenamiento, nunca sobre el conjunto de prueba ni sobre
+    el dataset completo.
+
+    Los pasos se toman de `build_pipeline` y se recorta el modelo, así que el
+    análisis usa exactamente el mismo preprocesado que el entrenamiento real.
+
+    Args:
+        df: Dataset completo.
+        target: Columna objetivo.
+        model_name: Modelo que se usaría después.
+        task_type: `"classification"` o `"regression"`.
+        casts: Tipos forzados por columna.
+        normalizations: Normalización por columna.
+        selection: Configuración del selector.
+        test_size: Fracción reservada como prueba.
+        random_state: Semilla del reparto.
+
+    Returns:
+        `DataFrame` con una fila por atributo original, tal y como lo devuelve
+        `feature_selection.describe_selection`.
+
+    Raises:
+        ValueError: Si no hay método de selección configurado.
+    """
+    if not selection or not selection.get("method"):
+        raise ValueError("No hay ningún método de selección que analizar.")
+
+    X = df.drop(columns=[target])
+    y = df[target]
+    X_train, _, y_train, _ = train_test_split(
+        X,
+        y,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=y if task_type == CLASSIFICATION else None,
+    )
+
+    completo = build_pipeline(
+        df,
+        model_name,
+        task_type,
+        target,
+        casts=casts,
+        normalizations=normalizations,
+        selection=selection,
+    )
+    # Se recorta el modelo: aquí solo hacen falta preprocesado y selector.
+    pasos = [(nombre, paso) for nombre, paso in completo.steps if nombre != "model"]
+    pipe = type(completo)(pasos) if "model" in completo.named_steps else completo
+    pipe.fit(X_train, y_train)
+    return feature_selection.describe_selection(pipe)
+
+
 def tune_model(
     df,
     target,
@@ -350,6 +448,7 @@ def tune_model(
     casts=None,
     normalizations=None,
     balancing=None,
+    selection=None,
     progress_callback=None,
 ):
     """Entrena un modelo con búsqueda de hiperparámetros.
@@ -373,6 +472,9 @@ def tune_model(
     balancing : dict | None
         Estrategia de balanceo. Con `class_weight` el peso se añade al espacio
         de búsqueda en lugar de fijarse.
+    selection : dict | None
+        Selección de atributos, `{method, k, percentile}`. Se ajusta dentro de
+        cada fold, no antes.
     progress_callback : callable | None
         Función que se invoca con `(etapa, actual, total)` en cada paso
         relevante: antes de explorar, al reentrenar y al calcular métricas.
@@ -405,6 +507,7 @@ def tune_model(
         casts=casts,
         normalizations=normalizations,
         balancing=balancing,
+        selection=selection,
     )
 
     param_grid = search_grid(model_name, task_type, selections)

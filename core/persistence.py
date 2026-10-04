@@ -51,6 +51,7 @@ class BundleMetadata:
     casts: dict = field(default_factory=dict)
     normalizations: dict = field(default_factory=dict)
     balancing: dict = field(default_factory=dict)
+    selection: dict = field(default_factory=dict)
     n_train_rows: int = 0
     dataset_included: bool = False
     dataset_path: Optional[str] = None
@@ -78,6 +79,8 @@ class BundleMetadata:
             lineas.append(f"Métricas: {metricas}")
         if self.balancing:
             lineas.append(_balancing_line(self.balancing))
+        if self.selection:
+            lineas.append(_selection_line(self.selection))
         if self.dataset_included:
             lineas.append("Incluye el dataset transformado")
         return "\n".join(lineas)
@@ -142,6 +145,7 @@ def build_metadata(
     casts: Optional[dict] = None,
     normalizations: Optional[dict] = None,
     balancing: Optional[dict] = None,
+    selection: Optional[dict] = None,
     app_version: str = "1.0",
     dataset_path: Optional[str] = None,
     notes: str = "",
@@ -188,6 +192,7 @@ def build_metadata(
         casts=dict(casts or {}),
         normalizations=dict(normalizations or {}),
         balancing=_balancing_info(pipeline, balancing),
+        selection=_selection_info(pipeline, selection),
         n_train_rows=int(len(df)) if df is not None else 0,
         dataset_included=False,
         dataset_path=dataset_path,
@@ -208,6 +213,51 @@ def _balancing_info(pipeline, balancing) -> dict:
     if (balancing or {}).get("method") == "class_weight":
         return {"method": "class_weight"}
     return {}
+
+
+def _selection_info(pipeline, selection) -> dict:
+    """Lo que se guarda de la selección: método, criterio y columnas."""
+    steps = getattr(pipeline, "named_steps", {})
+    selector = steps.get("selector")
+    if selector is None:
+        return {}
+    metodo = (selection or {}).get("method")
+    if not metodo:
+        return {}
+    criterio = {"k": (selection or {}).get("k")}
+    if (selection or {}).get("percentile") is not None:
+        criterio = {"percentile": (selection or {})["percentile"]}
+    from core import feature_selection
+
+    return {
+        "method": metodo,
+        "criterion": criterio,
+        "selected": feature_selection.selected_feature_names(pipeline),
+    }
+
+
+def _selection_line(selection: dict) -> str:
+    """Línea legible de la selección de atributos."""
+    from core import feature_selection
+
+    metodo = selection.get("method")
+    if not metodo:
+        return "Selección: ninguna"
+    etiqueta = feature_selection.method_label(metodo)
+    seleccionadas = selection.get("selected") or []
+    return f"Selección: {etiqueta} ({len(seleccionadas)} atributos conservados)"
+
+
+def selection_summary(pipeline, selection=None) -> str:
+    """Línea legible de la selección, o vacío si el pipeline no selecciona.
+
+    La interfaz siempre puede llamar a esta función: si no hubo selector, el
+    resumen no añade una línea que diga que no se seleccionó nada.
+    """
+    info = _selection_info(pipeline, selection)
+    if not info:
+        return ""
+    return _selection_line(info)
 
 
 def balancing_summary(pipeline, balancing=None) -> str:
@@ -243,6 +293,8 @@ def _upgrade_metadata(metadata: BundleMetadata) -> BundleMetadata:
     cambios = {}
     if not hasattr(metadata, "balancing"):
         cambios["balancing"] = {}
+    if not hasattr(metadata, "selection"):
+        cambios["selection"] = {}
     if cambios:
         metadata = replace(metadata, **cambios)
     return metadata

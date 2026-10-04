@@ -36,6 +36,12 @@ class AppState:
     balancing: Optional[str] = None
     class_distribution: Optional[dict] = None
 
+    # --- Selección de atributos ---
+    #: Método elegido (`"anova"`, `"chi2"`, …) o `None` si no se selecciona.
+    selection_method: Optional[str] = None
+    #: Criterio de corte: `{"k": 10}` o `{"percentile": 30.0}`.
+    selection_criteria: Optional[dict] = None
+
     # --- Persistencia ---
     bundle_path: Optional[str] = None
     bundle = None
@@ -60,6 +66,8 @@ class AppState:
         self._test_data = None
         self.balancing = None
         self.class_distribution = None
+        self.selection_method = None
+        self.selection_criteria = None
         self.bundle_path = None
 
     def reset_model(self):

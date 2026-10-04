@@ -41,6 +41,7 @@ automl_app/
 │   ├── model_trainer.py
 │   ├── balancing.py
 │   ├── feature_selection.py
+│   ├── comparison.py
 │   ├── persistence.py
 │   └── state.py
 ├── ui/
@@ -146,6 +147,10 @@ permite al usuario rehacer el preprocesamiento sin recargar el CSV.
   del selector de scikit-learn y lectura de qué atributos se conservaron.
   El selector se ajusta **dentro** del pipeline, nunca sobre `clean_df` ni sobre
   el conjunto de prueba.
+- `comparison.py` — solo comparativa de modelos: bloques pareados, rangos,
+  test de Friedman, post-hoc con corrección de Holm y diferencia crítica.
+  No dibuja el diagrama (eso vive en `ui/`) y es de solo lectura sobre
+  `export_df`: nunca modifica `state.pipeline` ni `state.metrics`.
 - `persistence.py` — solo guardado/carga de `.automl`, validación de esquema
   y predicción.
 

@@ -37,6 +37,10 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
   (chi-cuadrado, ANOVA F, información mutua y embebido con bosque aleatorio),
   corte por número de atributos o por porcentaje, y un botón «Analizar
   selección» que muestra la puntuación de cada atributo sin llegar a entrenar.
+- **Comparativa de modelos con el test de Friedman**: puntúa todos los modelos
+  compatibles sobre los mismos bloques de validación cruzada, da su ranking por
+  rangos medios, la diferencia crítica de Nemenyi y un post-hoc por pares con
+  corrección de Holm, más el diagrama de diferencias críticas.
 - **Modelos filtrados por compatibilidad**: solo se ofrecen los modelos que
   pueden usarse con esos datos (p. ej. se descartan los que necesitan más
   filas de las que hay) y se explica por qué se descartan.
@@ -221,6 +225,39 @@ y el motivo, en lugar de esconder la métrica.
 
 En multiclase el AUC es *One-vs-Rest* promediado (*macro*). El orden de las
 columnas y los nombres de las clases se toman de `pipe.named_steps["model"].classes_`.
+
+### Comparar modelos (test de Friedman)
+
+Elegir el modelo "mejor" con una sola métrica sobre un solo reparto de datos
+engaña: el ganador puede ser suerte de esa partición. La comparativa puntúa
+**todos los modelos compatibles sobre los mismos bloques** y pregunta si las
+diferencias entre ellos son más de lo que se esperaría por azar.
+
+Cómo se lee el resultado:
+
+| Concepto | Qué significa |
+|---|---|
+| **Puntuación media** | La métrica elegida (exactitud, RMSE…) promediada sobre los bloques |
+| **Rango medio** | Posición media en cada bloque; **menor rango = mejor modelo** |
+| **Friedman χ², p** | Si `p < 0.05` las diferencias son significativas; si no, no se puede afirmar que un modelo sea mejor |
+| **Diferencia crítica** | Rango que un modelo puede apartarse del mejor sin que se considere peor (Nemenyi) |
+| **Equivalente** | `sí` si el rango cae dentro de la diferencia crítica del mejor |
+| **Post-hoc** | Por qué par concreto difiere, con ajuste de Holm |
+
+Detalles que importan:
+
+- Los bloques están **pareados**: los mismos folds para todos los modelos, que
+  es la condición de validez del test. Por eso un modelo que falle en un bloque
+  se excluye entero con su motivo, en vez de compararse con menos datos.
+- El post-hoc solo es concluyente si el test de Friedman resulta significativo;
+  con `p` alto, los pares "significativos" son ruido y así se avisa.
+- La comparación es **de solo lectura**: no toca el modelo entrenado ni sus
+  métricas.
+
+**Aviso de tiempo**: con 5 modelos, 5 folds y 3 repeticiones son 75 ajustes de
+pipeline. Empieza con **2 repeticiones** y sube si el resultado queda justo.
+
+---
 
 ### Selección de atributos
 

@@ -34,13 +34,15 @@ MISSING_WARN_RATIO = 0.3
 #: de texto como numérica.
 CONVERTIBLE_RATIO = 0.9
 
+IDENTIFIER = "identificador"
+
 SEMANTIC_TYPES = (
     "numerico",
     "booleano",
     "categorico",
     "fecha",
     "texto",
-    "identificador",
+    IDENTIFIER,
 )
 
 SEMANTIC_LABELS = {
@@ -52,7 +54,7 @@ SEMANTIC_LABELS = {
     "identificador": "Identificador",
 }
 
-BLOCKING_TYPES = ("texto", "identificador")
+BLOCKING_TYPES = ("texto", IDENTIFIER)
 
 
 @dataclass(frozen=True)
@@ -67,6 +69,8 @@ class ColumnProfile:
     n_missing: int
     convertible_to_numeric: bool = False
     discrete: bool = False
+    value_min: Optional[float] = None
+    value_max: Optional[float] = None
     target_task: Optional[str] = None
     warnings: tuple = field(default_factory=tuple)
 
@@ -88,6 +92,13 @@ class ColumnProfile:
     @property
     def usable_as_target(self) -> bool:
         return self.target_task is not None
+
+    @property
+    def value_range(self) -> str:
+        """Rango de valores legible, para columnas numéricas."""
+        if self.value_min is None or self.value_max is None:
+            return "—"
+        return f"{self.value_min:.4g} … {self.value_max:.4g}"
 
     @property
     def is_numeric_like(self) -> bool:
@@ -179,13 +190,18 @@ def suggest_task_type(series: pd.Series) -> Optional[str]:
     return CLASSIFICATION
 
 
-def profile_column(series: pd.Series) -> ColumnProfile:
-    """Construye la `ColumnProfile` de una columna del dataset."""
+def profile_column(series: pd.Series, nombre: str | None = None) -> ColumnProfile:
+    """Construye la `ColumnProfile` de una columna del dataset.
+
+    `nombre` es opcional para poder perfilar columnas sueltas; `profile_dataframe`
+    lo rellena con el nombre real de cada columna.
+    """
     semantic = infer_semantic_type(series)
     n_rows = int(len(series))
     n_missing = int(series.isna().sum())
     n_unique = int(series.nunique(dropna=True))
     ratio = _numeric_ratio(series)
+    values = series.dropna()
 
     convertible = (
         not pdt.is_numeric_dtype(series)
@@ -200,7 +216,7 @@ def profile_column(series: pd.Series) -> ColumnProfile:
     )
 
     profile = ColumnProfile(
-        name=str(series.name),
+        name=nombre if nombre is not None else str(series.name),
         dtype=str(series.dtype),
         semantic_type=semantic,
         n_unique=n_unique,
@@ -208,12 +224,23 @@ def profile_column(series: pd.Series) -> ColumnProfile:
         n_missing=n_missing,
         convertible_to_numeric=convertible,
         discrete=discrete,
+        value_min=_safe_value(values, "min"),
+        value_max=_safe_value(values, "max"),
     )
     return replace(
         profile,
         target_task=suggest_task_type(series),
         warnings=_column_warnings(profile, ratio),
     )
+
+
+def _safe_value(values: pd.Series, how: str) -> Optional[float]:
+    """Extremo de una serie numérica, o `None` si no se puede calcular."""
+    serie = pd.to_numeric(values, errors="coerce").dropna()
+    if serie.empty:
+        return None
+    value = getattr(serie, how)()
+    return float(value) if pd.notna(value) else None
 
 
 def _column_warnings(profile: ColumnProfile, numeric_ratio: float) -> tuple:
@@ -267,10 +294,17 @@ def dataset_warnings(profiles: list) -> list:
     messages = []
     blocking = [p for p in profiles if not p.usable_as_feature]
     if blocking:
+        detalles = []
+        for profile in blocking:
+            if profile.semantic_type == IDENTIFIER:
+                consejo = "identificador: conviene eliminarla"
+            else:
+                consejo = f"{profile.label.lower()}: conviértela o elimínala"
+            detalles.append(f"{profile.name} ({consejo})")
         messages.append(
             "Columnas no utilizables como variables predictoras: "
-            + ", ".join(f"{p.name} ({p.label})" for p in blocking)
-            + ". Conviértelas o elimínalas."
+            + ", ".join(detalles)
+            + "."
         )
     if not any(p.usable_as_target for p in profiles):
         messages.append(

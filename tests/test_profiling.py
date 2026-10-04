@@ -77,3 +77,30 @@ def test_columna_numerica_no_es_identificador_si_repite_valores():
     serie = pd.Series(np.arange(60.0) % 5)
     assert profiling.infer_semantic_type(serie) == "numerico"
     assert profiling.profile_column(serie).discrete is True
+
+def test_profile_column_calcula_el_rango_de_valores():
+    serie = pd.Series([3.0, 1.0, 7.0, None])
+    profile = profiling.profile_column(serie, nombre="edad")
+    assert profile.name == "edad"
+    assert profile.value_min == 1.0
+    assert profile.value_max == 7.0
+    assert profile.value_range == "1 … 7"
+    assert profile.n_missing == 1
+
+
+def test_value_range_de_una_columna_sin_numeros():
+    profile = profiling.profile_column(pd.Series(["a", "b", None]))
+    assert profile.value_min is None
+    assert profile.value_max is None
+    assert profile.value_range == "—"
+
+
+def test_dataset_warnings_distingue_texto_de_identificador():
+    df = pd.DataFrame({
+        "nota": [f"comentario largo de la fila {i}" for i in range(60)],
+        "codigo": [f"c{i}" for i in range(60)],
+    })
+    profiles = profiling.profile_dataframe(df)
+    texto = " ".join(profiling.dataset_warnings(profiles))
+    assert "nota" in texto and "conviértela o elimínala" in texto
+    assert "codigo" in texto and "conviene eliminarla" in texto

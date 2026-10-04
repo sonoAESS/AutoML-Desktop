@@ -259,8 +259,10 @@ def align_features(
 ) -> tuple:
     """Prepara un CSV nuevo para pasarlo por el pipeline.
 
-    Selecciona las columnas requeridas, convierte los tipos a los usados en el
-    entrenamiento y aplica los mismos cambios de tipo y normalización.
+    Selecciona y ordena las columnas requeridas y ajusta sus tipos a los
+    usados en el entrenamiento. Los cambios de tipo y la normalización los
+    aplica después el propio pipeline, con las constantes ajustadas en
+    `fit`; no se repiten aquí para no aplicarlos dos veces.
 
     Parámetros
     ----------
@@ -279,30 +281,17 @@ def align_features(
         )
 
     frame = df.copy()
+    faltantes = set(report.missing)
     convertible = 0
     for column, dtype in metadata.feature_dtypes.items():
-        if column not in frame.columns:
+        # Las columnas ausentes se rellenan después con nulos: no se
+        # convierten aquí, porque pasarían a ser cadenas "nan".
+        if column not in frame.columns or column in faltantes:
             continue
         actual = str(frame[column].dtype)
         if actual != dtype:
             frame[column] = _coerce_dtype(frame[column], dtype)
             convertible += 1
-
-    casts = {
-        column: target
-        for column, target in (metadata.casts or {}).items()
-        if column in frame.columns
-    }
-    if casts:
-        frame = preprocessor.cast_columns(frame, casts)
-    normalizations = {
-        column: method
-        for column, method in (metadata.normalizations or {}).items()
-        if column in frame.columns
-    }
-    frame = preprocessor.apply_transformations(
-        frame, casts=None, normalizations=normalizations or None
-    )
 
     y = frame[metadata.target_column] if metadata.target_column in frame.columns else None
     X = frame.drop(columns=[metadata.target_column], errors="ignore")
@@ -328,8 +317,8 @@ def _coerce_dtype(series: pd.Series, dtype: str) -> pd.Series:
             return pd.to_numeric(series, errors="coerce").astype("Int64")
         if dtype == "bool":
             return preprocessor.cast_column(series, "booleano")
-        if dtype.startswith("string") or dtype == "object":
-            return series.astype("string")
+        if dtype.startswith("string") or dtype in ("str", "object"):
+            return preprocessor.cast_column(series, "texto")
         return series
     except (TypeError, ValueError):
         return series

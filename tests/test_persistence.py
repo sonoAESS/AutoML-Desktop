@@ -171,3 +171,38 @@ def test_profile_input_solo_devuelve_las_columnas_del_modelo(trained, dataset):
     nuevo = dataset.assign(extra=1)
     nombres = {p.name for p in persistence.profile_input(nuevo, metadata)}
     assert nombres == {"edad", "ciudad", "alta", "objetivo"}
+
+def test_predict_no_normaliza_dos_veces(trained, tmp_path):
+    """La normalización la aplica solo el pipeline, no `align_features`."""
+    pipe, metadata, export = trained
+    ruta = persistence.save_bundle(tmp_path / "m.automl", pipe, metadata)
+    bundle = persistence.load_bundle(ruta)
+
+    # una fila muy por encima del rango de entrenamiento
+    nuevo = export.head(1).assign(edad=[9999.0])
+    salida, _, _, _ = persistence.predict(bundle, nuevo)
+
+    directa = pipe.predict(
+        export.drop(columns=["objetivo"]).head(1).assign(edad=[9999.0])
+    )
+    assert salida["prediccion"].tolist() == pytest.approx(list(directa))
+
+
+def test_align_features_no_aplica_normalizacion(trained, dataset):
+    """`align_features` solo alinea columnas; deja transformar al pipeline."""
+    _, metadata, _ = trained
+    X, y, _ = persistence.align_features(dataset, metadata)
+    assert X["edad"].tolist() == dataset["edad"].tolist()
+    assert X["edad"].max() > 1.5  # sin normalizar min-max
+
+
+def test_predict_sin_columnas_opcionales(trained, tmp_path):
+    pipe, metadata, export = trained
+    bundle = persistence.load_bundle(
+        persistence.save_bundle(tmp_path / "m.automl", pipe, metadata)
+    )
+    salida, report, _, _ = persistence.predict(
+        bundle, export[["edad", "objetivo"]], strict=False
+    )
+    assert len(salida) == len(export)
+    assert "ciudad" in report.missing and "alta" in report.missing

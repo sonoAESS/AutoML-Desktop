@@ -96,9 +96,9 @@ def cast_column(series: pd.Series, target_type: str) -> pd.Series:
     if target_type == "numerico":
         return pd.to_numeric(series, errors="coerce")
     if target_type == "categorico":
-        return series.astype("object").where(series.notna(), np.nan).astype("string")
+        return _as_object(series)
     if target_type == "texto":
-        return series.astype("object").where(series.notna(), np.nan).astype("string")
+        return _as_object(series)
     if target_type == "booleano":
         return _to_bool(series)
     if target_type == "fecha":
@@ -106,10 +106,19 @@ def cast_column(series: pd.Series, target_type: str) -> pd.Series:
     raise ValueError(f"Tipo de dato desconocido: {target_type}")
 
 
+def _as_object(series: pd.Series) -> pd.Series:
+    """Devuelve la columna como `object`, conservando `NaN` como valor vacío.
+
+    No se usa el dtype `string` de pandas porque sus nulos (`pd.NA`) no los
+    entienden los transformadores de scikit-learn.
+    """
+    return series.astype("object").where(series.notna(), np.nan)
+
+
 def _to_bool(series: pd.Series) -> pd.Series:
     """Interpreta valores como `sí`/`no`, `true`/`false`, `1`/`0`."""
     if pdt.is_numeric_dtype(series):
-        return series.map(lambda v: bool(v) if pd.notna(v) else np.nan).astype("boolean")
+        return series.map(lambda v: bool(v) if pd.notna(v) else np.nan)
     truthy = {"1", "true", "t", "yes", "y", "si", "sí", "verdadero"}
     falsy = {"0", "false", "f", "no", "n", "falso"}
     def convert(value):
@@ -121,7 +130,7 @@ def _to_bool(series: pd.Series) -> pd.Series:
         if text in falsy:
             return False
         return np.nan
-    return series.map(convert).astype("boolean")
+    return series.map(convert)
 
 
 def cast_columns(df: pd.DataFrame, casts: dict) -> pd.DataFrame:

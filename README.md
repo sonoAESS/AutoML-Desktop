@@ -7,7 +7,26 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
 
 ---
 
-## Características
+## Identidad visual
+
+Azul, rojo y blanco: los colores del Ministerio de Educación Superior de
+Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la
+cabecera y como icono de la aplicación.
+
+| | | |
+|---|---|---|
+| `marino` `#12223b` | `azul_med` `#14448c` | `azul_clar` `#446dab` |
+| `acento` `#d34223` | `oro` `#81660d` | `fondo` `#f3f4f7` |
+
+Los botones tienen tres clases —**principal**, secundario y de peligro— que se
+asignan con `ui.theme.marcar(boton, "primario")`, no con estilos escritos a
+mano.
+
+Todos los colores viven en `ui/theme.py`: `COLORES` para la paleta y `TONOS`
+para los tintes de hover, selección y deshabilitado. Si añades un color, va
+ahí, no en el fichero donde se use.
+
+Características
 
 - **Carga de CSV, XLSX, XLS y ODS** con autodetección de separador y
   codificación (`utf-8-sig` → `cp1252` → `latin-1`). Si el libro de Excel

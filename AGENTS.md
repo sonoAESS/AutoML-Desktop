@@ -53,8 +53,10 @@ automl_app/
 │   ├── results_tab.py
 │   ├── predict_tab.py
 │   ├── file_dialogs.py
+│   ├── theme.py
+│   ├── plotting.py
 │   └── workers.py
-├── resources/
+├── resources/            escudo e icono (solo binarios)
 ├── specs/
 │   ├── README.md
 │   └── NNN-slug/

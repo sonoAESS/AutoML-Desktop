@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | Especificación — **esperando puerta 1** |
+| Estado | Especificación — escrita |
 | Orden de ejecución | 3 de 3 (de la rama `design/redesign-ui`) |
 | Ámbito | las cinco pestañas de `ui/`, `ui/main_window.py`, `tests/test_estados_ui.py` |
 | Depende de | SDD-007 (tokens), SDD-008 (estructura) |

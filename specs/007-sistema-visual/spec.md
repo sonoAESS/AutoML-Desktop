@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | Especificación — **esperando puerta 1** |
+| Estado | Especificación — **implementada** |
 | Orden de ejecución | 1 de 3 (de la rama `design/redesign-ui`) |
 | Ámbito | `ui/theme.py` (nuevo), `main.py`, `resources/` (nuevo), `AutoML_MEC_Desktop.spec`, `pyproject.toml`, `ui/plotting.py` (nuevo), `tests/test_theme.py` |
 | Depende de | — |

@@ -2,7 +2,7 @@
 
 | Campo | Valor |
 |---|---|
-| Estado | Especificación — **esperando puerta 1** |
+| Estado | Especificación — escrita |
 | Orden de ejecución | 2 de 3 (de la rama `design/redesign-ui`) |
 | Ámbito | `ui/main_window.py`, `ui/navigation.py` (nuevo), `ui/sidebar.py` (nuevo), las cinco pestañas, `tests/test_navigation_ui.py` |
 | Depende de | SDD-007 (tokens y estilos) |

@@ -47,6 +47,17 @@ orden indicado porque todas tocan `core/model_trainer.py::build_pipeline`.
 | [005](005-comparativa-friedman/spec.md) | Comparativa de modelos con Friedman | 6 | 002, 004 |
 | [006](006-export-predicciones/spec.md) | Exportar datos de entrada + predicción | 2 | 001 |
 
+### Rediseño de la interfaz — rama `design/redesign-ui`
+
+No son funcionalidades nuevas: es la reescritura de la capa visual. Las tres
+se ejecutan en ese orden porque cada una usa lo que la anterior dejó.
+
+| Spec | Titular | Orden | Depende de |
+|---|---|---|---|
+| [007](007-sistema-visual/spec.md) | Sistema visual y marca institucional | 1 | — |
+| [008](008-estructura-navegacion/spec.md) | Estructura, navegación y densidad | 2 | 007 |
+| [009](009-estados-y-densidad/spec.md) | Estados de los controles y densidad | 3 | 007, 008 |
+
 Orden de ejecución: **001 → 006 → 003 → 004 → 002 → 005**.
 
 001 va primero porque 006 reutiliza su `detect_separator` para elegir el
@@ -72,6 +83,9 @@ separador del CSV exportado.
 | 004 | puerta 1 superada | escrito | escrito |
 | 005 | puerta 1 superada | escrito | escrito |
 | 006 | puerta 1 superada | implementado | implementado |
+| 007 | puerta 1 superada | escrito | escrito |
+| 008 | puerta 1 superada | escrito | escrito |
+| 009 | puerta 1 superada | escrito | escrito |
 
 ### Desviaciones registradas en 006
 
@@ -113,6 +127,23 @@ cambian el alcance de ninguna spec:
 | 005 | Holm se implementa a mano: `statsmodels` no es una dependencia permitida. |
 | 002, 004 | Los `.automl` antiguos restauran un `BundleMetadata` sin los campos nuevos, así que `describe()` lanzaría `AttributeError`. Se resuelve en un punto único: `_upgrade_metadata` en `load_bundle`. `BUNDLE_VERSION` sigue en `1`. |
 | 006 | `predict()` mantiene su firma; el trabajo compartido pasa a un `_predictor` privado para evitar implementaciones divergentes. `SchemaReport` gana `renamed: tuple = ()` para comunicar los nombres libres. |
+
+## Desviaciones registradas en 007
+
+| Tema | Decisión tomada |
+|---|---|
+| Empaquetado de `core/` y `ui/` | Se sospechó que `find_packages` devolvía `[]` por faltar los `__init__.py` y que `pip install .` empaquetaba una distribución vacía. **Era falso**: con setuptools ≥61 (aquí 84.0) `packages.find` usa paquetes de espacio de nombres por defecto. Se comprobó construyendo la rueda antes y después. Aun así se añadieron `core/__init__.py` y `ui/__init__.py`, que son los que AGENTS §2 documenta. |
+| `resources/style.qss` | Se daría por hecho que estaba "pendiente de implementar". Está vacío y `main.py` nunca lo carga: es un fichero muerto. Se borra y el QSS pasa a `ui/theme.py`. |
+| `.gitignore` con `*.spec` | Dejaba fuera `AutoML_MEC_Desktop.spec`, que es el fichero que hay que editar para incluir los recursos. Corregido en la fase 0 de la rama. |
+| Empaquetar la fuente Ubuntu | Descartado. No está instalada en el sistema y añadirla sería una dependencia nueva (AGENTS §7.3). Se usa la lista de preferencia de `QFont.setFamilies`. |
+| Sombras con `QGraphicsDropShadowEffect` | Descartado: repinta el canvas de matplotlib en cada cambio y no aporta nada a un tema plano. |
+
+## Desviaciones registradas en 008
+
+| Tema | Decisión tomada |
+|---|---|
+| Auditoría del layout | El primer análisis delegate-se apoya en un agente externo resulted incorrecto en varios puntos (`goto_train`/`goto_predict` no existen, `preprocess_tab` no tiene 9 filas densas). La investigación se repitió leyendo el código real: el problema es la **falta de scroll** y las **tablas sin `setMaximumHeight`**, no la densidad de las filas. La spec se escribió sobre los datos reales. |
+| `_go_to_predict` con `QStackedWidget` | El `hasattr(tabs, "setCurrentIndex")` de la función seguiría siendo cierto con un `QStackedWidget`, así que el fallo se habría mantenido en silencio. Se elimina en favor de la señal `navigate_requested`. |
 
 ## Transversal a todas las specs
 

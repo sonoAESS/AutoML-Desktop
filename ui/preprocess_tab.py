@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, preprocessor, profiling
+from ui.theme import marcar
 
 METHOD_LABELS = {
     "none": "sin normalizar",
@@ -107,6 +108,7 @@ class PreprocessTab(QWidget):
         layout.addWidget(self.gb_distribucion)
 
         self.btn_apply = QPushButton("Aplicar preprocesamiento")
+        marcar(self.btn_apply, "primario")
         self.btn_apply.clicked.connect(self.apply)
         layout.addWidget(self.btn_apply)
 

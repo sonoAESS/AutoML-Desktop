@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, feature_selection, model_specs, model_trainer, profiling
+from ui.theme import marcar
 from ui.workers import SelectionWorker, TuneWorker, WorkerThread
 
 TASK_LABELS = {
@@ -156,6 +157,7 @@ class TrainTab(QWidget):
         layout.addWidget(gb_seleccion)
 
         self.btn_train = QPushButton("Entrenar modelo")
+        marcar(self.btn_train, "primario")
         self.btn_train.clicked.connect(self.train)
         layout.addWidget(self.btn_train)
 

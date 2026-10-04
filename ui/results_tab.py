@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from sklearn.metrics import ConfusionMatrixDisplay
 
 from core import model_specs, model_trainer, persistence
+from ui.theme import marcar
 from ui.workers import ComparisonWorker, WorkerThread
 
 
@@ -104,6 +105,7 @@ class ResultsTab(QWidget):
 
         botones = QHBoxLayout()
         self.btn_save = QPushButton("Guardar modelo y dataset (.automl)")
+        marcar(self.btn_save, "primario")
         self.btn_save.clicked.connect(self.save_bundle)
         self.btn_export = QPushButton("Exportar solo el dataset (CSV)")
         self.btn_export.clicked.connect(self.export_dataset)
@@ -144,6 +146,7 @@ class ResultsTab(QWidget):
         v.addLayout(opciones)
 
         self.btn_comparar = QPushButton("Comparar modelos compatibles")
+        marcar(self.btn_comparar, "primario")
         self.btn_comparar.clicked.connect(self.comparar_modelos)
         self.btn_comparar.setEnabled(False)
         v.addWidget(self.btn_comparar)
@@ -406,6 +409,8 @@ class ResultsTab(QWidget):
         ax = self.figure.add_subplot(111)
         if not self._plot_cv_results(ax):
             self._plot_test(ax)
+        # Sin esto las etiquetas largas (nombres de atributo, clases) se cortan.
+        self.figure.tight_layout()
         self.canvas.draw()
 
     def _show_metrics(self, metrics):

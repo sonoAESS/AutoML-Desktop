@@ -40,6 +40,7 @@ automl_app/
 │   ├── model_specs.py
 │   ├── model_trainer.py
 │   ├── balancing.py
+│   ├── feature_selection.py
 │   ├── persistence.py
 │   └── state.py
 ├── ui/
@@ -141,6 +142,10 @@ permite al usuario rehacer el preprocesamiento sin recargar el CSV.
   métricas.
 - `balancing.py` — solo distribución de clases, catálogo de estrategias y el
   paso `BalancedSampler` que equilibra el pipeline.
+- `feature_selection.py` — solo catálogo de métodos de selección, construcción
+  del selector de scikit-learn y lectura de qué atributos se conservaron.
+  El selector se ajusta **dentro** del pipeline, nunca sobre `clean_df` ni sobre
+  el conjunto de prueba.
 - `persistence.py` — solo guardado/carga de `.automl`, validación de esquema
   y predicción.
 

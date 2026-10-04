@@ -33,6 +33,10 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
 - **Balanceo de clases** opcional al entrenar, con seis estrategias: ninguna,
   pesos de clase, submuestreo aleatorio, sobremuestreo aleatorio, SMOTE y
   SMOTEN. Solo en clasificación, y solo con modelos que lo admitan.
+- **Selección de atributos** opcional antes de entrenar, con cuatro métodos
+  (chi-cuadrado, ANOVA F, información mutua y embebido con bosque aleatorio),
+  corte por número de atributos o por porcentaje, y un botón «Analizar
+  selección» que muestra la puntuación de cada atributo sin llegar a entrenar.
 - **Modelos filtrados por compatibilidad**: solo se ofrecen los modelos que
   pueden usarse con esos datos (p. ej. se descartan los que necesitan más
   filas de las que hay) y se explica por qué se descartan.
@@ -217,6 +221,35 @@ y el motivo, en lugar de esconder la métrica.
 
 En multiclase el AUC es *One-vs-Rest* promediado (*macro*). El orden de las
 columnas y los nombres de las clases se toman de `pipe.named_steps["model"].classes_`.
+
+### Selección de atributos
+
+En datasets con muchas columnas, Quite sabe más quitando: se puede pedir que el
+pipeline se quede solo con las más útiles. La selección ocurre **dentro** del
+pipeline, después de codificar las variables, así que el conjunto de prueba
+conserva todas las columnas y las métricas siguen siendo comparables.
+
+| Método      | Qué es                          | Cuándo usarlo                                  | Coste   |
+|-------------|---------------------------------|------------------------------------------------|---------|
+| `chi2`      | Chi-cuadrado                    | Clasificación con valores no negativos          | Bajo    |
+| `anova`     | Test F                          | Punto de partida: rápido y con datos limpios   | Bajo    |
+| `mutual_info` | Información mutua              | Cuando sospechas relaciones no lineales        | Alto    |
+| `embedded`  | Bosque aleatorio               | Buscas la mejor exactitud y aceptas el coste    | Muy alto|
+
+Notas:
+
+- `chi2` no admite datos negativos, así que el pipeline añade un `MinMaxScaler`
+  antes de seleccionar. En regresión desaparece: no sirve para variables
+  continuas.
+- `embedded` no admite el corte por porcentaje, porque necesita conocer el
+  número de columnas al construir el bosque; la opción aparece desactivada.
+- «Analizar selección» ajusta el selector sobre la parte de entrenamiento y
+  pinta la tabla de puntuaciones. No entrena el modelo final: sirve para ver
+  qué se va a quedar antes de decidir.
+- Si eliges `class_weight` como forma de balanceo, el control manual de pesos
+  de clase desaparece de los hiperparámetros para que no se contradigan.
+
+---
 
 ### Balanceo de clases
 

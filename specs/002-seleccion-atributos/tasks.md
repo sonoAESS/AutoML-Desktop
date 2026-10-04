@@ -1,11 +1,11 @@
 # SDD-002 — Tareas de implementación
 
-Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
-(el orden canónico de pasos lo fija 004, R-015).
+Estado: **completada**. Depende de SDD-004, que fija el orden canónico de
+pasos del pipeline (R-015).
 
 ## Fase A — Núcleo puro
 
-### [ ] T-001 · Catálogo `SELECTION_METHODS`
+### [x] T-001 · Catálogo `SELECTION_METHODS`
 **Ficheros:** `core/feature_selection.py` (nuevo)
 **Requisitos:** R-001, R-002, R-003
 
@@ -15,7 +15,7 @@ Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
 4. `available_methods(task_type)` en el orden del catálogo, filtrando regresión.
 **Verificación:** test de que `available_methods("regression")` no contiene `chi2` y `available_methods("classification")` sí.
 
-### [ ] T-002 · Selectores seguros
+### [x] T-002 · Selectores seguros
 **Ficheros:** `core/feature_selection.py`
 **Criterios:** C-001, C-003
 
@@ -24,7 +24,7 @@ Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
 3. Ambas de primer nivel (pickle-friendly), sin lambdas en los atributos ajustados.
 **Verificación:** `pytest` con `X` de 4 columnas y `k=10`: ajusta, deja 4 columnas y `k_effective_ == 4`.
 
-### [ ] T-003 · `build_selector`
+### [x] T-003 · `build_selector`
 **Ficheros:** `core/feature_selection.py`
 **Requisitos:** R-002, R-004
 
@@ -34,7 +34,7 @@ Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
 4. Devolver `SelectPercentile`, `SafeSelectFromModel` o `SafeSelectKBest`.
 **Verificación:** 8 tests de la matriz método × tarea.
 
-### [ ] T-004 · `feature_origin_map`
+### [x] T-004 · `feature_origin_map`
 **Ficheros:** `core/feature_selection.py`
 **Criterios:** C-005
 
@@ -43,7 +43,7 @@ Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
 3. Respaldo con `n.split("__", 1)[-1]` si el recuento no cuadra.
 **Verificación:** test con 1 numérica + 1 categórica de 3 valores → mapa de 4 entradas con `edad, ciudad, ciudad, ciudad`.
 
-### [ ] T-005 · `describe_selection` y `selected_feature_names`
+### [x] T-005 · `describe_selection` y `selected_feature_names`
 **Ficheros:** `core/feature_selection.py`
 **Requisitos:** R-008, R-009, R-010
 
@@ -53,7 +53,7 @@ Estado: **esperando puerta 2**. Depende de que SDD-004 esté implementada
 4. Sin paso `selector` → `DataFrame` vacío con las columnas esperadas.
 **Verificación:** test sobre un pipeline de toy data que el subconjunto seleccionado son las columnas informativas.
 
-### [ ] T-006 · Tests de `feature_selection`
+### [x] T-006 · Tests de `feature_selection`
 **Ficheros:** `tests/test_feature_selection.py` (nuevo)
 **Criterios:** C-001 a C-005
 
@@ -65,7 +65,7 @@ agrupación one-hot, dataframe vacío.
 
 ## Fase B — Integración con el pipeline
 
-### [ ] T-007 · `build_pipeline(..., selection=None)` y `analyze_selection`
+### [x] T-007 · `build_pipeline(..., selection=None)` y `analyze_selection`
 **Ficheros:** `core/model_trainer.py`
 **Requisitos:** R-006, R-007, R-005 (corrigida)
 
@@ -75,7 +75,7 @@ agrupación one-hot, dataframe vacío.
 4. `analyze_selection` con split de entrenamiento estratificado.
 **Verificación:** test de regresión de que `build_pipeline` sin `selection` tiene los mismos pasos que antes; test de que `analyze_selection` devuelve la tabla.
 
-### [ ] T-008 · Persistencia y estado
+### [x] T-008 · Persistencia y estado
 **Ficheros:** `core/persistence.py`, `core/state.py`
 **Requisitos:** R-015, R-016, R-017
 
@@ -88,7 +88,7 @@ agrupación one-hot, dataframe vacío.
 
 ## Fase C — Interfaz
 
-### [ ] T-009 · `SelectionWorker`
+### [x] T-009 · `SelectionWorker`
 **Ficheros:** `ui/workers.py`
 **Requisitos:** R-012 (parte del worker)
 
@@ -96,7 +96,7 @@ agrupación one-hot, dataframe vacío.
 2. `run()` llama a `model_trainer.analyze_selection` y emite el `DataFrame`.
 **Verificación:** test headless con `QCoreApplication` y un dataset pequeño.
 
-### [ ] T-010 · Grupo de selección en `TrainTab`
+### [x] T-010 · Grupo de selección en `TrainTab`
 **Ficheros:** `ui/train_tab.py`
 **Requisitos:** R-011, R-012, R-014
 
@@ -108,7 +108,7 @@ agrupación one-hot, dataframe vacío.
 6. Bloquear los controles en `_lock_controls` durante el análisis y el entrenamiento.
 **Verificación:** test headless que marca la casilla, elige `anova`, pulsa “Analizar” y comprueba que la tabla tiene filas; y que al entrenar sin selección el resultado es idéntico a antes.
 
-### [ ] T-011 · Resumen en `ResultsTab`
+### [x] T-011 · Resumen en `ResultsTab`
 **Ficheros:** `ui/results_tab.py`
 **Requisitos:** R-013
 
@@ -118,7 +118,7 @@ agrupación one-hot, dataframe vacío.
 
 ## Fase D — Documentación
 
-### [ ] T-012 · `README.md` y `AGENTS.md`
+### [x] T-012 · `README.md` y `AGENTS.md`
 **Ficheros:** `README.md`, `AGENTS.md`
 
 1. `AGENTS.md` §2: añadir `core/feature_selection.py`; §3.4 describir su responsabilidad.
@@ -131,5 +131,5 @@ grep -R "PySide6\|PyQt\|from ui\." core/   # vacío
 python -m pytest -q
 ```
 
-- [ ] C-001…C-010 cubiertos.
-- [ ] `pytest -q` verde y `black`/`isort` sin diferencias.
+- [x] C-001…C-010 cubiertos.
+- [x] `pytest -q` verde y `black`/`isort` sin diferencias.

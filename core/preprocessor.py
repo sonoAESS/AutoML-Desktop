@@ -8,6 +8,7 @@ Las transformaciones se pueden aplicar de dos formas equivalentes:
 - como pasos del pipeline (`ColumnTyper`, `ColumnNormalizer`), para que un
   modelo guardado aplique exactamente la misma transformación a datos nuevos.
 """
+
 from typing import Optional
 
 import numpy as np
@@ -44,9 +45,11 @@ def categorical_columns(df: pd.DataFrame) -> list:
 def drop_duplicates(df: pd.DataFrame) -> pd.DataFrame:
     return df.drop_duplicates()
 
+
 def drop_high_missing(df: pd.DataFrame, threshold: float = 0.5) -> pd.DataFrame:
     """Elimina columnas con más de `threshold` proporción de nulos."""
     return df.loc[:, df.isna().mean() < threshold]
+
 
 def fill_missing(df, numeric_strategy="median", categorical_strategy="mode"):
     df = df.copy()
@@ -63,7 +66,9 @@ def fill_missing(df, numeric_strategy="median", categorical_strategy="mode"):
 
     for col in cat_cols:
         if categorical_strategy == "mode":
-            df[col] = df[col].fillna(df[col].mode().iloc[0] if not df[col].mode().empty else "desconocido")
+            df[col] = df[col].fillna(
+                df[col].mode().iloc[0] if not df[col].mode().empty else "desconocido"
+            )
         elif categorical_strategy == "constant":
             df[col] = df[col].fillna("desconocido")
         elif categorical_strategy == "drop":
@@ -71,12 +76,16 @@ def fill_missing(df, numeric_strategy="median", categorical_strategy="mode"):
 
     return df.reset_index(drop=True)
 
+
 def drop_columns(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
     return df.drop(columns=[c for c in cols if c in df.columns])
 
+
 def encode_categoricals(df: pd.DataFrame, max_cardinality: int = 20):
     """One-hot encoding para categóricas de baja cardinalidad."""
-    low_card = [c for c in categorical_columns(df) if df[c].nunique() <= max_cardinality]
+    low_card = [
+        c for c in categorical_columns(df) if df[c].nunique() <= max_cardinality
+    ]
     return pd.get_dummies(df, columns=low_card, drop_first=True)
 
 
@@ -121,6 +130,7 @@ def _to_bool(series: pd.Series) -> pd.Series:
         return series.map(lambda v: bool(v) if pd.notna(v) else np.nan)
     truthy = {"1", "true", "t", "yes", "y", "si", "sí", "verdadero"}
     falsy = {"0", "false", "f", "no", "n", "falso"}
+
     def convert(value):
         if pd.isna(value):
             return np.nan
@@ -130,6 +140,7 @@ def _to_bool(series: pd.Series) -> pd.Series:
         if text in falsy:
             return False
         return np.nan
+
     return series.map(convert)
 
 
@@ -142,7 +153,9 @@ def cast_columns(df: pd.DataFrame, casts: dict) -> pd.DataFrame:
     return df
 
 
-def date_features(df: pd.DataFrame, columns, parts=("year", "month", "day")) -> pd.DataFrame:
+def date_features(
+    df: pd.DataFrame, columns, parts=("year", "month", "day")
+) -> pd.DataFrame:
     """Sustituye cada columna de fecha por sus partes numéricas."""
     df = df.copy()
     for name in columns:
@@ -344,7 +357,9 @@ def _apply_stats(values: pd.Series, entry: dict) -> pd.Series:
     return (values - entry["center"]) / entry["scale"]
 
 
-def _normalize_with_batch_stats(frame: pd.DataFrame, normalizations: dict) -> pd.DataFrame:
+def _normalize_with_batch_stats(
+    frame: pd.DataFrame, normalizations: dict
+) -> pd.DataFrame:
     out = frame
     for method, columns in normalization_plan(normalizations).items():
         out = normalize_columns(out, columns, method)

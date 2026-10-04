@@ -129,6 +129,7 @@ def test_column_normalizer_sin_fit_normaliza_el_lote():
 
 def test_transformers_son_picklables():
     import pickle
+
     datos = pd.DataFrame({"a": [1.0, 2.0, 3.0]})
     for obj in (
         preprocessor.ColumnTyper({"a": "numerico"}),

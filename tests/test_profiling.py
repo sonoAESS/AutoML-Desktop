@@ -29,9 +29,13 @@ def test_texto_libre_se_detecta():
 
 def test_suggest_task_type():
     assert profiling.suggest_task_type(pd.Series([0, 1, 0, 1])) == "classification"
-    assert profiling.suggest_task_type(pd.Series(["si", "no", "si"])) == "classification"
+    assert (
+        profiling.suggest_task_type(pd.Series(["si", "no", "si"])) == "classification"
+    )
     assert profiling.suggest_task_type(pd.Series([0.5, 1.5, 2.5, 9.75])) == "regression"
-    assert profiling.suggest_task_type(pd.Series([f"id-{i}" for i in range(30)])) is None
+    assert (
+        profiling.suggest_task_type(pd.Series([f"id-{i}" for i in range(30)])) is None
+    )
 
 
 def test_columna_convertible_a_numerico():
@@ -55,20 +59,24 @@ def test_profile_column_calcula_nulos_y_cardinalidad():
 
 
 def test_suggest_target_elige_menor_cardinalidad():
-    df = pd.DataFrame({
-        "edad": [20, 31, 44, 55, 61, 72, 18, 29, 40, 51],
-        "ciudad": ["a", "b", "a", "c", "b", "a", "c", "b", "a", "c"],
-        "id": [f"x{i}" for i in range(10)],
-    })
+    df = pd.DataFrame(
+        {
+            "edad": [20, 31, 44, 55, 61, 72, 18, 29, 40, 51],
+            "ciudad": ["a", "b", "a", "c", "b", "a", "c", "b", "a", "c"],
+            "id": [f"x{i}" for i in range(10)],
+        }
+    )
     profiles = profiling.profile_dataframe(df)
     assert profiling.suggest_target(profiles).name == "ciudad"
 
 
 def test_dataset_warnings_avisa_de_bloqueos():
-    df = pd.DataFrame({
-        "texto": [f"nota larga {i}" for i in range(80)],
-        "valor": np.arange(80.0),
-    })
+    df = pd.DataFrame(
+        {
+            "texto": [f"nota larga {i}" for i in range(80)],
+            "valor": np.arange(80.0),
+        }
+    )
     messages = profiling.dataset_warnings(profiling.profile_dataframe(df))
     assert any("no utilizables" in m for m in messages)
 
@@ -77,6 +85,7 @@ def test_columna_numerica_no_es_identificador_si_repite_valores():
     serie = pd.Series(np.arange(60.0) % 5)
     assert profiling.infer_semantic_type(serie) == "numerico"
     assert profiling.profile_column(serie).discrete is True
+
 
 def test_profile_column_calcula_el_rango_de_valores():
     serie = pd.Series([3.0, 1.0, 7.0, None])
@@ -96,10 +105,12 @@ def test_value_range_de_una_columna_sin_numeros():
 
 
 def test_dataset_warnings_distingue_texto_de_identificador():
-    df = pd.DataFrame({
-        "nota": [f"comentario largo de la fila {i}" for i in range(60)],
-        "codigo": [f"c{i}" for i in range(60)],
-    })
+    df = pd.DataFrame(
+        {
+            "nota": [f"comentario largo de la fila {i}" for i in range(60)],
+            "codigo": [f"c{i}" for i in range(60)],
+        }
+    )
     profiles = profiling.profile_dataframe(df)
     texto = " ".join(profiling.dataset_warnings(profiles))
     assert "nota" in texto and "conviértela o elimínala" in texto

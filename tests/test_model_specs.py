@@ -11,7 +11,9 @@ def test_list_models_por_tarea_y_familia():
     assert "Regresión Logística" in model_specs.list_models("classification")
     assert "Regresión Lineal" in model_specs.list_models("regression")
     assert model_specs.list_models("classification", "svm") == ["SVM"]
-    assert model_specs.list_models("classification", "lineal") == ["Regresión Logística"]
+    assert model_specs.list_models("classification", "lineal") == [
+        "Regresión Logística"
+    ]
 
 
 def test_los_modelos_comparten_nombre_entre_tareas():
@@ -52,10 +54,12 @@ def test_available_metrics_depende_del_modelo():
 
 
 def test_compatibilidad_bloquea_columnas_texto():
-    df = pd.DataFrame({
-        "nota": [f"comentario largo {i} con muchas palabras" for i in range(80)],
-        "x": range(80),
-    })
+    df = pd.DataFrame(
+        {
+            "nota": [f"comentario largo {i} con muchas palabras" for i in range(80)],
+            "x": range(80),
+        }
+    )
     profiles = profiling.profile_dataframe(df)
     results = model_specs.evaluate_compatibility("classification", profiles, target="x")
     assert results and all(not r.compatible for r in results)
@@ -97,6 +101,7 @@ def test_get_spec_por_defecto_busca_en_ambas_tareas():
     assert model_specs.get_spec("KNN").task_type == "classification"
     with pytest.raises(KeyError):
         model_specs.get_spec("No existe")
+
 
 def test_none_es_un_valor_elegido_y_no_el_dominio_completo():
     """Elegir «ninguno» en max_depth debe buscar solo ese valor."""

@@ -7,6 +7,7 @@ usarse como variables predictoras y cuáles son candidatas a objetivo.
 
 No contiene lógica de interfaz ni de Qt.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
@@ -280,9 +281,7 @@ def suggest_target(profiles: list) -> Optional[ColumnProfile]:
     candidates = [
         profile
         for profile in profiles
-        if profile.usable_as_target
-        and profile.missing_pct < 1
-        and profile.n_unique > 1
+        if profile.usable_as_target and profile.missing_pct < 1 and profile.n_unique > 1
     ]
     if not candidates:
         return None
@@ -307,9 +306,7 @@ def dataset_warnings(profiles: list) -> list:
             + "."
         )
     if not any(p.usable_as_target for p in profiles):
-        messages.append(
-            "No se detecta ninguna columna válida como variable objetivo."
-        )
+        messages.append("No se detecta ninguna columna válida como variable objetivo.")
     n_const = [p for p in profiles if p.n_unique <= 1]
     if n_const:
         messages.append(

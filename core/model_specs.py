@@ -8,6 +8,7 @@ detectados y para generar los controles de hiperparámetros.
 
 No contiene lógica de interfaz ni de Qt.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -38,6 +39,25 @@ METRICS = {
     CLASSIFICATION: ("accuracy", "f1_macro", "roc_auc"),
     REGRESSION: ("rmse", "mae", "r2"),
 }
+
+#: Nombre legible de cada métrica, para la interfaz y la documentación.
+METRIC_LABELS = {
+    "accuracy": "Exactitud",
+    "f1_macro": "F1 (macro)",
+    "roc_auc": "AUC (ROC One-vs-Rest)",
+    "rmse": "RMSE",
+    "mae": "MAE",
+    "r2": "R²",
+}
+
+#: Métricas que se muestran siempre para una tarea, en orden de presentación.
+METRIC_KEYS = {
+    CLASSIFICATION: ("accuracy", "f1_macro", "roc_auc"),
+    REGRESSION: ("rmse", "mae", "r2"),
+}
+
+#: Métrica con la que se ordenan y comparan los modelos.
+RANKING_METRIC = {CLASSIFICATION: "f1_macro", REGRESSION: "r2"}
 
 #: Filas mínimas recomendadas para que una familia de modelos tenga sentido.
 MIN_ROWS = {"svm": 50, "vecinos": 30}
@@ -97,6 +117,8 @@ class ModelSpec:
     factory: Callable[[], Any]
     params: tuple = ()
     supports_probability: bool = False
+    #: Ruta del parámetro que acepta `class_weight="balanced"`, si existe.
+    class_weight_path: Optional[str] = None
     notes: str = ""
 
     def build(self) -> Any:
@@ -115,8 +137,7 @@ class ModelSpec:
         grid = {}
         for spec in self.params:
             seleccion = (
-                selections[spec.name]
-                if spec.name in selections else SIN_SELECCION
+                selections[spec.name] if spec.name in selections else SIN_SELECCION
             )
             grid.update(spec.as_grid(seleccion))
         return grid
@@ -162,10 +183,13 @@ CLASSIFICATION_SPECS = {
         task_type=CLASSIFICATION,
         factory=lambda: LogisticRegression(max_iter=1000),
         params=(
-            ParamSpec("C", "C (inverso de regularización)", (0.01, 0.1, 1.0, 10.0, 100.0)),
+            ParamSpec(
+                "C", "C (inverso de regularización)", (0.01, 0.1, 1.0, 10.0, 100.0)
+            ),
             ParamSpec("class_weight", "Peso de clases", (None, "balanced")),
         ),
         supports_probability=True,
+        class_weight_path="model__class_weight",
         notes="Interpretable y rápido. Funciona bien con muchas clases.",
     ),
     "Árbol de Decisión": ModelSpec(
@@ -175,6 +199,7 @@ CLASSIFICATION_SPECS = {
         factory=lambda: DecisionTreeClassifier(random_state=42),
         params=_TREE_PARAMS,
         supports_probability=True,
+        class_weight_path="model__class_weight",
         notes="Muy interpretable, propenso a sobreajustar.",
     ),
     "Random Forest": ModelSpec(
@@ -184,6 +209,7 @@ CLASSIFICATION_SPECS = {
         factory=lambda: RandomForestClassifier(n_estimators=200, random_state=42),
         params=_FOREST_PARAMS,
         supports_probability=True,
+        class_weight_path="model__class_weight",
         notes="Robusto y preciso; menos interpretable.",
     ),
     "SVM": ModelSpec(
@@ -192,11 +218,14 @@ CLASSIFICATION_SPECS = {
         task_type=CLASSIFICATION,
         factory=lambda: CalibratedClassifierCV(SVC(random_state=42), ensemble=False),
         params=(
-            ParamSpec("estimator__C", "C (inverso de regularización)", (0.1, 1.0, 10.0, 100.0)),
+            ParamSpec(
+                "estimator__C", "C (inverso de regularización)", (0.1, 1.0, 10.0, 100.0)
+            ),
             ParamSpec("estimator__kernel", "Núcleo", ("rbf", "linear")),
             ParamSpec("estimator__gamma", "Gamma", ("scale", "auto")),
         ),
         supports_probability=True,
+        class_weight_path="model__estimator__class_weight",
         notes="Muy potente con muchas variables; lento con muchos datos.",
     ),
     "KNN": ModelSpec(
@@ -216,7 +245,9 @@ REGRESSION_SPECS = {
         family="lineal",
         task_type=REGRESSION,
         factory=lambda: LinearRegression(),
-        params=(ParamSpec("fit_intercept", "Con término independiente", (True, False)),),
+        params=(
+            ParamSpec("fit_intercept", "Con término independiente", (True, False)),
+        ),
         notes="Línea base interpretable para relaciones lineales.",
     ),
     "Ridge": ModelSpec(
@@ -311,17 +342,35 @@ def list_families(task_type: Optional[str] = None) -> list:
 
 
 def available_metrics(task_type: str, model_name: Optional[str] = None) -> list:
-    """Métricas de scoring válidas para la tarea y el modelo elegidos."""
-    metrics = list(METRICS.get(task_type, ()))
-    if not model_name:
-        return metrics
+    """Métricas de scoring válidas para una tarea.
+
+    `model_name` se acepta por compatibilidad pero **no** filtra: el AUC
+    aparece siempre y su indisponibilidad se explica después, con
+    `metrics["auc_motivo"]` (ver `model_trainer._compute_metrics`). Para el
+    catálogo actual el valor devuelto no cambia en ningún caso real.
+    """
+    return list(METRICS.get(task_type, ()))
+
+
+def class_weight_path(model_name: str, task_type: str = CLASSIFICATION):
+    """Ruta del parámetro `class_weight` de un modelo, o `None` si no lo tiene.
+
+    KNN no lo admite; el SVM lo tiene anidado dentro del `SVC` calibrado.
+    """
     try:
-        spec = get_spec(model_name, task_type)
+        return get_spec(model_name, task_type).class_weight_path
     except KeyError:
-        return metrics
-    if not spec.supports_probability:
-        metrics = [m for m in metrics if m != "roc_auc"]
-    return metrics
+        return None
+
+
+def metric_label(key: str) -> str:
+    """Nombre legible de una métrica (o la clave si no está en el catálogo)."""
+    return METRIC_LABELS.get(key, key)
+
+
+def metrics_for_ranking(task_type: str) -> str:
+    """Métrica usada para ordenar y comparar modelos."""
+    return RANKING_METRIC.get(task_type, "f1_macro")
 
 
 def family_label(family: str) -> str:
@@ -358,7 +407,9 @@ def evaluate_compatibility(
     """
     features = [p for p in profiles if not target or p.name != target]
     blocking = [p for p in features if not p.usable_as_feature]
-    rows = n_rows if n_rows is not None else max((p.n_rows for p in features), default=0)
+    rows = (
+        n_rows if n_rows is not None else max((p.n_rows for p in features), default=0)
+    )
 
     results = []
     for name, spec in iter_specs(task_type):

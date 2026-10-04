@@ -1,14 +1,35 @@
 # ui/results_tab.py
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog, QMessageBox,
-    QHBoxLayout, QCheckBox,
-)
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QBrush, QColor
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QFileDialog,
+    QHBoxLayout,
+    QHeaderView,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QVBoxLayout,
+    QWidget,
+)
 from sklearn.metrics import ConfusionMatrixDisplay
 
-from core import persistence
+from core import model_specs, persistence
+
+
+def _format_metric(valor) -> str:
+    """Valor de una métrica para la tabla: número, texto o `n/d`."""
+    if valor is None:
+        return "n/d"
+    if isinstance(valor, bool):
+        return "sí" if valor else "no"
+    if isinstance(valor, (int, float)):
+        return f"{valor:.4f}"
+    return str(valor)
 
 
 class ResultsTab(QWidget):
@@ -24,6 +45,15 @@ class ResultsTab(QWidget):
         self.lbl = QLabel("Sin resultados todavía.")
         self.lbl.setWordWrap(True)
         layout.addWidget(self.lbl)
+
+        self.tbl_metricas = QTableWidget(0, 2)
+        self.tbl_metricas.setHorizontalHeaderLabels(["Métrica", "Valor"])
+        self.tbl_metricas.horizontalHeader().setSectionResizeMode(
+            1, QHeaderView.Stretch
+        )
+        self.tbl_metricas.verticalHeader().setVisible(False)
+        self.tbl_metricas.setMaximumHeight(140)
+        layout.addWidget(self.tbl_metricas)
 
         self.figure = Figure(figsize=(5, 4))
         self.canvas = FigureCanvasQTAgg(self.figure)
@@ -61,17 +91,46 @@ class ResultsTab(QWidget):
         metrics = self.state.metrics
         if not metrics:
             return
-        self.lbl.setText(
-            "Métricas:\n" + "\n".join(
-                f"  {k}: {v:.4f}" if isinstance(v, (int, float)) else f"  {k}: {v}"
-                for k, v in metrics.items()
-            )
-        )
+        self._show_metrics(metrics)
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         if not self._plot_cv_results(ax):
             self._plot_test(ax)
         self.canvas.draw()
+
+    def _show_metrics(self, metrics):
+        """Tabla Métrica/Valor con `n/d` y motivo cuando algo no existe."""
+        claves = model_specs.METRIC_KEYS.get(self.state.task_type, ())
+        self.tbl_metricas.setRowCount(len(claves))
+        motivo = metrics.get("auc_motivo")
+
+        for fila, clave in enumerate(claves):
+            etiqueta = model_specs.metric_label(clave)
+            item_clave = QTableWidgetItem(etiqueta)
+            item_valor = QTableWidgetItem(_format_metric(metrics.get(clave)))
+            if metrics.get(clave) is None:
+                item_valor.setForeground(QBrush(QColor(Qt.GlobalColor.gray)))
+                if motivo:
+                    item_valor.setToolTip(motivo)
+            self.tbl_metricas.setItem(fila, 0, item_clave)
+            self.tbl_metricas.setItem(fila, 1, item_valor)
+
+        resumen = [
+            f"Modelo: {self.state.model_name}",
+            (
+                f"Evaluado sobre {metrics['n_test']} filas de prueba"
+                if "n_test" in metrics
+                else ""
+            ),
+            persistence.balancing_summary(
+                self.state.pipeline, {"method": self.state.balancing}
+            ),
+        ]
+        if metrics.get("auc_disponible") is False:
+            resumen.append(f"Aviso: {motivo}")
+        if isinstance(metrics.get("best_params"), dict):
+            resumen.append(f"mejores parámetros: {metrics['best_params']}")
+        self.lbl.setText("\n".join(texto for texto in resumen if texto))
 
     def _plot_test(self, ax):
         if not self.state._test_data:
@@ -108,7 +167,8 @@ class ResultsTab(QWidget):
             return
         if not self.state.target_column or not self.state.model_name:
             QMessageBox.warning(
-                self, "Sin modelo",
+                self,
+                "Sin modelo",
                 "No se sabe qué variable objetivo ni qué modelo se usó.",
             )
             return
@@ -156,7 +216,9 @@ class ResultsTab(QWidget):
             )
             return
         destino, _ = QFileDialog.getSaveFileName(
-            self, "Exportar dataset transformado", "dataset_preprocesado.csv",
+            self,
+            "Exportar dataset transformado",
+            "dataset_preprocesado.csv",
             "CSV (*.csv)",
         )
         if not destino:
@@ -177,7 +239,9 @@ class ResultsTab(QWidget):
                 tabs.setCurrentIndex(indice)
 
     def _default_name(self):
-        base = self.state.source_path.rsplit("/", 1)[-1] if self.state.source_path else ""
+        base = (
+            self.state.source_path.rsplit("/", 1)[-1] if self.state.source_path else ""
+        )
         nombre = (self.state.model_name or "modelo").replace(" ", "_")
         if base:
             return f"{base.rsplit('.', 1)[0]}_{nombre}{persistence.BUNDLE_SUFFIX}"

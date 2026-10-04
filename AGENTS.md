@@ -35,8 +35,11 @@ automl_app/
 ├── core/
 │   ├── __init__.py
 │   ├── data_loader.py
+│   ├── profiling.py
 │   ├── preprocessor.py
+│   ├── model_specs.py
 │   ├── model_trainer.py
+│   ├── persistence.py
 │   └── state.py
 ├── ui/
 │   ├── __init__.py
@@ -44,7 +47,9 @@ automl_app/
 │   ├── data_tab.py
 │   ├── preprocess_tab.py
 │   ├── train_tab.py
-│   └── results_tab.py
+│   ├── results_tab.py
+│   ├── predict_tab.py
+│   └── workers.py
 ├── resources/
 ├── tests/
 ├── pyproject.toml
@@ -88,11 +93,20 @@ Campos actuales de `AppState`:
 |-------------------|-----------------------------|------------------------------------------|
 | `raw_df`          | `pd.DataFrame | None`       | Datos tal como se cargaron del CSV.      |
 | `clean_df`        | `pd.DataFrame | None`       | Datos después del preprocesamiento.      |
+| `export_df`       | `pd.DataFrame | None`       | Dataset transformado con el pipeline.    |
+| `profiles`        | `list[ColumnProfile]`       | Perfil semántico por columna.            |
+| `column_types`    | `dict[str, str]`            | Tipos forzados por el usuario.           |
+| `normalizations`  | `dict[str, str]`            | Normalización elegida por columna.        |
 | `target_column`   | `str | None`                | Nombre de la variable objetivo.          |
 | `task_type`       | `"classification" | "regression" | None` | Tipo de tarea elegida.              |
+| `family`          | `str | None`                 | Familia del modelo elegida.              |
+| `model_name`      | `str | None`                 | Modelo elegido.                          |
 | `pipeline`        | `sklearn.pipeline.Pipeline | None` | Pipeline completo entrenado.      |
 | `trained_model`   | `Any | None`                | Alias del pipeline entrenado.            |
 | `metrics`         | `dict`                      | Diccionario de métricas tras entrenar.   |
+| `bundle`          | `persistence.Bundle | None`  | Proyecto `.automl` cargado.              |
+| `bundle_path`     | `str | None`                | Ruta del último `.automl` guardado/cargado.|
+| `source_path`     | `str | None`                | Ruta del CSV cargado.                    |
 
 Si necesitas añadir un campo, hazlo aquí y documenta el cambio en el
 README si afecta al flujo de usuario.
@@ -106,9 +120,14 @@ permite al usuario rehacer el preprocesamiento sin recargar el CSV.
 ### 3.4 Submódulos por responsabilidad
 
 - `data_loader.py` — solo E/S de CSV y resumen descriptivo.
+- `profiling.py` — solo perfil semántico de columnas y sugerencias.
 - `preprocessor.py` — solo transformaciones puras `DataFrame -> DataFrame`.
+- `model_specs.py` — solo el catálogo declarativo de modelos, familias,
+  hiperparámetros y reglas de compatibilidad.
 - `model_trainer.py` — solo construcción de pipelines, entrenamiento y
   métricas.
+- `persistence.py` — solo guardado/carga de `.automl`, validación de esquema
+  y predicción.
 
 No mezcles responsabilidades: `model_trainer.py` no debe abrir archivos ni
 `data_loader.py` debe conocer scikit-learn.

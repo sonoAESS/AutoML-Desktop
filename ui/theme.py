@@ -29,7 +29,7 @@ COLORES: dict[str, str] = {
     "azul_osc": "#193867",
     "azul_med": "#14448c",
     "azul_clar": "#446dab",
-    "lateral": "#24507f",
+    "lateral": "#ffffff",
     "acento": "#d34223",
     "oro": "#81660d",
     "verde": "#1c7c4d",
@@ -53,8 +53,9 @@ TONOS: dict[str, str] = {
     "inactivo_borde": "#e6eaf2",
     "inactivo_primario": "#b9c4d6",
     "inactivo_texto": "#f0f2f6",
-    "sidebar_texto": "#dbe6f3",
-    "sidebar_hover": "#1c3c66",
+    "sidebar_texto": "#20242c",
+    "sidebar_titulo": "#14448c",
+    "sidebar_hover": "#e8eef7",
     "tabla_alterna": "#f7f9fc",
     "rejilla": "#e6e9ef",
     "tab_hover": "#dfe6f2",
@@ -419,19 +420,25 @@ QLabel[role="exito"]    {{ color: {_c('verde')}; }}
 QLabel[role="suave"]    {{ color: {_c('suave')}; }}
 
 /* ---------- barra lateral de pasos ---------- */
-QFrame#lateral {{ background-color: {_c('lateral')}; border: none; }}
+/* Fondo blanco a propósito: el escudo es azul y rojo, y sobre azul se perdían
+   los dos colores. Al ser blanca necesita borde, si no se pega al contenido. */
+QFrame#lateral {{
+    background-color: {_c('lateral')};
+    border: none;
+    border-right: 1px solid {_c('borde')};
+}}
 QLabel#marca_titulo {{
-    color: {_c('blanco')};
+    color: {_c('sidebar_titulo')};
     font-size: {TAMANO_BASE + 2}pt;
     font-weight: 600;
     background-color: transparent;
 }}
 QLabel#marca_organizacion {{
-    color: {_c('sidebar_texto')};
+    color: {_c('suave')};
     font-size: {TAMANO_BASE - 1}pt;
     background-color: transparent;
 }}
-QLabel#paso_estado {{ color: {_c('sidebar_texto')}; background-color: transparent; }}
+QLabel#paso_estado {{ color: {_c('suave')}; background-color: transparent; }}
 QPushButton#paso {{
     background-color: transparent;
     border: none;
@@ -442,7 +449,7 @@ QPushButton#paso {{
     text-align: left;
     font-weight: 600;
 }}
-QPushButton#paso:hover {{ background-color: {_c('sidebar_hover')}; color: {_c('blanco')}; }}
+QPushButton#paso:hover {{ background-color: {_c('sidebar_hover')}; color: {_c('marino')}; }}
 QPushButton#paso:checked {{
     background-color: {_c('azul_med')};
     border-left: 3px solid {_c('acento')};
@@ -450,7 +457,7 @@ QPushButton#paso:checked {{
 }}
 /* Un paso completado se distingue por el texto («✓») y por el borde, no solo
    por el color: en escala de grises el usuario tiene que saber dónde está. */
-QPushButton#paso[estado="completado"] {{ color: {_c('blanco')}; }}
+QPushButton#paso[estado="completado"] {{ color: {_c('sidebar_titulo')}; }}
 QPushButton#paso[estado="completado"]:checked {{
     background-color: {_c('azul_osc')};
     border-left: 3px solid {_c('oro')};

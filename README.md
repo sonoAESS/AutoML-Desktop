@@ -10,13 +10,28 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
 ## Identidad visual
 
 Azul, rojo y blanco: los colores del Ministerio de Educación Superior de
-Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la
-cabecera y como icono de la aplicación.
+Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la barra lateral y como icono de la aplicación.
 
 | | | |
 |---|---|---|
-| `marino` `#12223b` | `azul_med` `#14448c` | `lateral` `#24507f` |
+| `marino` `#12223b` | `azul_med` `#14448c` | `lateral` `#ffffff` |
 | `acento` `#d34223` | `oro` `#81660d` | `fondo` `#f3f4f7` |
+
+La barra lateral es **blanca a propósito**: el escudo es azul y rojo, y sobre
+un fondo azul se perdían los dos colores. Ser blanca obliga a dos ajustes que
+no son opcionales:
+
+- El texto de los pasos pasa a oscuro (`sidebar_texto`), porque el blanco sobre
+  blanco es invisible. El título de la marca usa `sidebar_titulo`, el azul del
+  escudo.
+- `QFrame#lateral` lleva `border-right`, o la barra se leería como un hueco
+  entre el escudo y el contenido.
+
+`tests/test_theme.py::test_ningun_texto_de_la_barra_blanca_queda_blanco`
+comprueba que sobre fondo blanco ningún texto de la barra siga siendo blanco,
+salvo en los selectores `:checked`, que sí pintan fondo oscuro. Ese test
+existe porque el paso completado se quedó con el texto blanco al poner la
+barra blanca, y el texto desapareció.
 
 Los botones tienen tres clases —**principal**, secundario y de peligro— que se
 asignan con `ui.theme.marcar(boton, "primario")`, no con estilos escritos a

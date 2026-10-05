@@ -58,6 +58,7 @@ automl_app/
 │   ├── layout.py
 │   ├── sidebar.py
 │   ├── enabled.py
+│   ├── empty_state.py
 │   └── workers.py
 ├── resources/            escudo e icono (solo binarios)
 ├── specs/
@@ -274,6 +275,33 @@ Reglas asociadas:
   a avisar (§5.2 siguiente).
 - El texto visible de un botón no pasa de **28 caracteres**; el detalle largo va
   al tooltip.
+
+### 5.6 Una pestaña sin datos explica qué falta
+
+**Regla**: cada pestaña tiene un `EmptyState` (`ui/empty_state.py`) que sustituye
+al contenido vacío. Una tabla con su cabecera y ninguna fila no dice nada, y
+hace que la aplicación parezca rota.
+
+El patrón es siempre el mismo:
+
+```python
+def _alternar_vacio(self):
+    alternar_estado_vacio(self.vacio, (self.table, self.canvas), self.state.raw_df is None)
+```
+
+Tres reglas que los tests comprueban:
+
+- El mensaje **nombra el paso siguiente** («Entrena un modelo en el paso 3»), y
+  el número tiene que existir en la barra lateral.
+- **Las acciones nunca se ocultan**: «Aplicar preprocesamiento», «Entrenar
+  modelo» y «Aplicar el modelo» se quedan fuera del alternador.
+- Se oculta con `setVisible(False)`, nunca sacando el widget del layout: los
+  tests de UI los localizan por atributo.
+
+El mensaje **no lleva botón**: un botón dentro del estado vacío que salte a
+otra pestaña tendría que tocar el `QStackedWidget` del padre, que es justo el
+acoplamiento que §5.4 elimina. El texto dice qué hacer y la barra lateral lo
+hace.
 
 ### 5.3 Manejo de errores en la UI
 

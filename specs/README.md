@@ -57,6 +57,7 @@ se ejecutan en ese orden porque cada una usa lo que la anterior dejó.
 | [007](007-sistema-visual/spec.md) | Sistema visual y marca institucional | 1 | — |
 | [008](008-estructura-navegacion/spec.md) | Estructura, navegación y densidad | 2 | 007 |
 | [009](009-estados-y-densidad/spec.md) | Estados de los controles y densidad | 3 | 007, 008 |
+| [010](010-estados-vacios/spec.md) | Estados vacíos explicados | 4 | 007, 008, 009 |
 
 Orden de ejecución: **001 → 006 → 003 → 004 → 002 → 005**.
 
@@ -86,6 +87,7 @@ separador del CSV exportado.
 | 007 | puerta 1 superada | implementado | implementado |
 | 008 | puerta 1 superada | implementado | implementado |
 | 009 | puerta 1 superada | implementado | implementado |
+| 010 | puerta 1 superada | implementado | implementado |
 
 ### Desviaciones registradas en 006
 

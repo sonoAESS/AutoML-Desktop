@@ -79,6 +79,32 @@ apagado y explica que hay que cargar un archivo.
 La regla es que cada pestaña decide leyendo solo `AppState`, nunca mirando
 lo que hizo la operación anterior.
 
+### Cuando una pestaña está vacía
+
+Ninguna pestaña enseña una tabla vacía. Cuando falta algo, el contenido se
+sustituye por un mensaje centrado con tres niveles:
+
+```
+Todavía no hay un modelo entrenado
+Aquí aparecerán las métricas del modelo, la curva ROC, la matriz
+de confusión y la importancia de cada variable.
+                       Entrena un modelo en el paso 3
+```
+
+El último línea siempre cita el paso de la barra lateral que resuelve la
+carencia, para que las dos mitades de la ventana hablen el mismo idioma.
+
+| Pestaña | Qué muestra vacío |
+|---|---|
+| Datos | «No hay ningún archivo cargado» → paso 1 |
+| Preprocesamiento | «No hay datos que limpiar» → paso 1 |
+| Entrenamiento | «Faltan los datos ya limpiados» → paso 2 |
+| Resultados | «Todavía no hay un modelo entrenado» → paso 3 |
+| Predicción | «No hay ningún modelo cargado» o «Faltan los datos a predecir» |
+
+Los botones de acción («Aplicar preprocesamiento», «Entrenar modelo») nunca
+se ocultan: son la acción, no el contenido.
+
 Características
 
 - **Carga de CSV, XLSX, XLS y ODS** con autodetección de separador y

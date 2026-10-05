@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, preprocessor, profiling
+from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 from ui.theme import ESPACIOS, marcar
 
@@ -145,12 +146,105 @@ class PreprocessTab(QWidget):
         self.grupos.addItem(self.gb_distribucion, "Distribución de clases")
         self._pagina_distribucion = self.grupos.indexOf(self.gb_distribucion)
 
+        # Sin datos, ninguno de los grupos sirve todavía.
+        self._update_enabled_state()
+
     # ------------------------------------------------------------------
     def refresh(self):
         self._fill_columns()
         self._show_casts()
         self._fill_normalizations()
         self._show_distribution()
+        self._update_enabled_state()
+
+    # ------------------------------------------------------------------
+    def _update_enabled_state(self):
+        """Enciende solo los controles que pueden usarse con estos datos.
+
+        Antes los trece controles quedaban habilitados siempre, y el usuario
+        veía casillas activas para un dataset que ni siquiera había cargado.
+
+        Idempotente: solo lee `self.state`, así que llamarla dos veces no
+        cambia nada.
+        """
+        hay_datos = self.state.raw_df is not None
+
+        # El perfil semántico refina la decisión: si no hay variables
+        # numéricas, la estrategia numérica no tiene a qué aplicarse. Sin esto
+        # la única alternativa sería apagar todo en bloque, que deja ruido.
+        tipos = {p.semantic_type for p in (self.state.profiles or ())}
+        hay_numericas = "numerico" in tipos
+        hay_categoricas = bool(tipos & {"categorico", "booleano", "fecha", "texto"})
+
+        sin_datos = "Carga un archivo para usar esta opción."
+        sin_numericas = "No hay variables numéricas en este dataset."
+        sin_categoricas = "No hay variables categóricas en este dataset."
+
+        con_pista(
+            self.chk_dups,
+            hay_datos,
+            (
+                "Quita las filas repetidas, que empujan las métricas hacia el "
+                "grupo sobrerrepresentado."
+                if hay_datos
+                else sin_datos
+            ),
+        )
+        con_pista(
+            self.chk_high_missing,
+            hay_datos,
+            (
+                "Elimina las columnas que tienen más de la mitad de valores vacíos."
+                if hay_datos
+                else sin_datos
+            ),
+        )
+        con_pista(
+            self.chk_dates,
+            hay_datos,
+            (
+                "Convierte cada fecha en tres columnas numéricas: año, mes y día."
+                if hay_datos
+                else sin_datos
+            ),
+        )
+        con_pista(
+            self.cmb_num,
+            hay_datos and hay_numericas,
+            (
+                "Cómo se rellenan los huecos de las variables numéricas."
+                if hay_datos and hay_numericas
+                else (sin_datos if not hay_datos else sin_numericas)
+            ),
+        )
+        con_pista(
+            self.cmb_cat,
+            hay_datos and hay_categoricas,
+            (
+                "Cómo se rellenan los huecos de las variables categóricas."
+                if hay_datos and hay_categoricas
+                else (sin_datos if not hay_datos else sin_categoricas)
+            ),
+        )
+        con_pista(
+            self.list_cols,
+            hay_datos,
+            (
+                "Marca aquí las columnas que quieras quitar del dataset."
+                if hay_datos
+                else sin_datos
+            ),
+        )
+        self.table_norm.setEnabled(hay_datos)
+        con_pista(
+            self.btn_apply,
+            hay_datos,
+            (
+                "Aplica lo de arriba y deja el dataset listo para entrenar."
+                if hay_datos
+                else "Carga un archivo para poder aplicar el preprocesamiento."
+            ),
+        )
 
     def _show_distribution(self):
         """Tabla con la distribución de clases del objetivo elegido."""

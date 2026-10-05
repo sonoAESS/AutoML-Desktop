@@ -9,8 +9,8 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
 
 ## Identidad visual
 
-Azul, rojo y blanco: los colores del Ministerio de Educación Superior de
-Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la barra lateral y como icono de la aplicación.
+Azul, rojo y blanco: los colores del Ministerio de Educación de la República
+de Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la barra lateral y como icono de la aplicación.
 
 | | | |
 |---|---|---|

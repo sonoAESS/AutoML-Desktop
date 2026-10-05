@@ -380,3 +380,36 @@ def test_las_rutas_del_spec_existen():
     spec = (RAIZ / "AutoML_MEC_Desktop.spec").read_text(encoding="utf-8")
     for ruta in re.findall(r"\(\s*[\"']([^\"']+)[\"']\s*,", spec):
         assert (RAIZ / ruta).exists(), ruta
+
+
+# ---------------------------------------------------------------------------
+# Versión: una sola cifra que tocar
+# ---------------------------------------------------------------------------
+
+
+def test_la_version_del_codigo_coincide_con_pyproject():
+    """`pyproject.toml` es la fuente de verdad y el `.spec` lee de ahí.
+
+    Sin este test, subir la versión en un sitio y olvidar el otro es el fallo
+    más probable: el ejecutable se llamaría 1.0.0 y la ventana 0.3.0, o al
+    revés.
+    """
+    import tomllib
+
+    raiz = Path(__file__).resolve().parent.parent
+    with open(raiz / "pyproject.toml", "rb") as fh:
+        pyproject = tomllib.load(fh)
+    assert pyproject["project"]["version"] == theme.VERSION_APP
+
+
+def test_main_publica_la_version_en_los_metadatos_de_qt():
+    """`setApplicationVersion` es lo que aparece en el gestor de tareas y en el
+    diálogo «Acerca de» del sistema operativo.
+
+    No se ejecuta `main()` porque abriría el bucle de eventos; se comprueba el
+    cableado en el fuente.
+    """
+    raiz = Path(__file__).resolve().parent.parent
+    fuente = (raiz / "main.py").read_text(encoding="utf-8")
+    assert "setApplicationVersion(VERSION_APP)" in fuente
+    assert "VERSION_APP" in fuente

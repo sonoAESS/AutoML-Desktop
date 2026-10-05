@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "automl-desktop"
-version = "0.2.0"
+version = "1.0.0"
 description = "AutoML Desktop: clasificación y regresión sin programar"
 requires-python = ">=3.10"
 dependencies = [

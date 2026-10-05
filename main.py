@@ -4,12 +4,13 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from ui.main_window import MainWindow
-from ui.theme import NOMBRE_APP, apply_theme
+from ui.theme import NOMBRE_APP, VERSION_APP, apply_theme
 
 
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(NOMBRE_APP)
+    app.setApplicationVersion(VERSION_APP)
     # El tema va antes de la ventana para que los widgets nazcan ya con estilo.
     apply_theme(app)
     window = MainWindow()

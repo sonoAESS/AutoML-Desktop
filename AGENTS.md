@@ -57,6 +57,7 @@ automl_app/
 │   ├── plotting.py
 │   ├── layout.py
 │   ├── sidebar.py
+│   ├── enabled.py
 │   └── workers.py
 ├── resources/            escudo e icono (solo binarios)
 ├── specs/
@@ -255,7 +256,26 @@ self.train_tab.model_trained.connect(self.results_tab.refresh)
 **Nunca** llamar directamente a métodos de otra pestaña para pasar datos;
 usa siempre `AppState` + señal.
 
-### 5.2 Manejo de errores en la UI
+### 5.2 El estado de los controles se deriva de `AppState`
+
+**Regla dura**: cada pestaña tiene un `_update_enabled_state()` que **solo lee
+`self.state`**. No mira la visibilidad de otro widget, ni el texto de una
+etiqueta, ni lo que pasó en la última operación.
+
+Motivo: `preprocess_tab` no tenía ni una llamada a `setEnabled`, así que
+mostraba trece controles activos para un dataset que no estaba cargado.
+
+Reglas asociadas:
+
+- Un control apagado **explica por qué** en su `toolTip` (R-010). Un control
+  apagado sin explicación parece una aplicación rota.
+- Si un grupo se desactiva, sus hijos también: `ui.enabled.habilitar_hijos()`.
+- Los errores se siguen mostrando con `QMessageBox`; deshabilitar no sustituye
+  a avisar (§5.2 siguiente).
+- El texto visible de un botón no pasa de **28 caracteres**; el detalle largo va
+  al tooltip.
+
+### 5.3 Manejo de errores en la UI
 
 Toda operación que pueda fallar debe ir envuelta en `try/except Exception`
 y mostrar un `QMessageBox.critical(self, "Error", str(e))`. **No dejar que

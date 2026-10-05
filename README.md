@@ -61,6 +61,24 @@ dentro de su pestaña en vez de recortarse.
 
 Atajos: `Ctrl+1`…`Ctrl+5` para ir a un paso, `Ctrl+Tab` para avanzar.
 
+### Controles activos y por qué
+
+Un control apagado siempre dice en suoltip qué falta. Antes, pulsar
+«Aplicar preprocesamiento» sin dataset abría un error; ahora el botón está
+apagado y explica que hay que cargar un archivo.
+
+| Estado | Qué se apaga |
+|---|---|
+| Sin dataset | Todo Preprocesamiento, menos la carga |
+| Sin variables numéricas | La estrategia de imputación numérica |
+| Sin dataset limpio, objetivo o modelo | «Entrenar modelo» |
+| Sin modelo entrenado | Guardar, exportar e ir a Predicción |
+| Sin modelo guardado | «Aplicar el modelo» |
+| Modelo, pero sin datos de entrada | «Aplicar el modelo» |
+
+La regla es que cada pestaña decide leyendo solo `AppState`, nunca mirando
+lo que hizo la operación anterior.
+
 Características
 
 - **Carga de CSV, XLSX, XLS y ODS** con autodetección de separador y

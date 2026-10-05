@@ -1,53 +1,53 @@
 # SDD-009 — Tareas
 
-Estado: **esperando puerta 2**. Depende de SDD-007 y SDD-008.
+Estado: **completada**.
 
 ## Fase A — Utilidad compartida
 
-- [ ] **T-001.** `ui/enabled.py` (nuevo) con `habilitar_hijos(padre, habilitado)`; docstring en español. Sin Qt fuera de `ui/`.
+- [x] **T-001.** `ui/enabled.py` (nuevo) con `habilitar_hijos(padre, habilitado)`; docstring en español. Sin Qt fuera de `ui/`.
 
 ## Fase B — Preprocesamiento (el caso extremo)
 
-- [ ] **T-002.** `_update_enabled_state()`: sin `raw_df`, todo deshabilitado menos la carga.
-- [ ] **T-003.** Condiciones por perfil semántico: sin numéricas, `cb_num` fuera; sin categóricas, `cb_cat` fuera.
-- [ ] **T-004.** Tooltips con el motivo cuando se deshabilita.
-- [ ] **T-005.** Invocar desde `refresh()` y desde `apply()`.
+- [x] **T-002.** `_update_enabled_state()`: sin `raw_df`, todo deshabilitado menos la carga.
+- [x] **T-003.** Condiciones por perfil semántico: sin numéricas, `cb_num` fuera; sin categóricas, `cb_cat` fuera.
+- [x] **T-004.** Tooltips con el motivo cuando se deshabilita.
+- [x] **T-005.** Invocar desde `refresh()` y desde `apply()`.
 
 ## Fase C — Datos
 
-- [ ] **T-006.** `_update_enabled_state()` para `btn_usar_objetivo`, `btn_reperfil` y las tablas.
+- [x] **T-006.** `_update_enabled_state()` para `btn_usar_objetivo`, `btn_reperfil` y las tablas.
 
 ## Fase D — Entrenamiento
 
-- [ ] **T-007.** `_update_enabled_state()`: `btn_train` exige `clean_df`, objetivo y modelo.
-- [ ] **T-008.** Unificar `_toggle_tune_options` y `_refresh_balancing` con el mismo criterio de `_update_enabled_state`, sin duplicar reglas.
-- [ ] **T-009.** Invocar desde `refresh()` y tras `train()`/`analizar_seleccion()`.
+- [x] **T-007.** `_update_enabled_state()`: `btn_train` exige `clean_df`, objetivo y modelo.
+- [x] **T-008.** Unificar `_toggle_tune_options` y `_refresh_balancing` con el mismo criterio de `_update_enabled_state`, sin duplicar reglas.
+- [x] **T-009.** Invocar desde `refresh()` y tras `train()`/`analizar_seleccion()`.
 
 ## Fase E — Resultados
 
-- [ ] **T-010.** `_update_enabled_state()`: `btn_save`, `btn_export`, `btn_load_in_predict`, `tbl_metricas` y canvas exigen `pipeline`.
-- [ ] **T-011.** Conservar la condición de ≥3 modelos de la comparativa.
+- [x] **T-010.** `_update_enabled_state()`: `btn_save`, `btn_export`, `btn_load_in_predict`, `tbl_metricas` y canvas exigen `pipeline`.
+- [x] **T-011.** Conservar la condición de ≥3 modelos de la comparativa.
 
 ## Fase F — Predicción
 
-- [ ] **T-012.** `_update_enabled_state()`: `btn_predict` exige bundle **y** datos; `btn_export` y `btn_add_to_data` exigen predicciones.
-- [ ] **T-013.** Invocar desde `refresh()`, `load_bundle()`, `load_data()` y `predict()`.
+- [x] **T-012.** `_update_enabled_state()`: `btn_predict` exige bundle **y** datos; `btn_export` y `btn_add_to_data` exigen predicciones.
+- [x] **T-013.** Invocar desde `refresh()`, `load_bundle()`, `load_data()` y `predict()`.
 
 ## Fase G — Densidad
 
-- [ ] **T-014.** Acortar los botones >28 caracteres según la tabla del diseño, moviendo el detalle al tooltip.
-- [ ] **T-015.** `toolTip` en todo control interactivo sin etiqueta.
-- [ ] **T-016.** Clase `peligro` en los botones que destruyen datos.
-- [ ] **T-017.** Ninguna fila horizontal de nivel superior con más de 5 widgets.
+- [x] **T-014.** Acortar los botones >28 caracteres según la tabla del diseño, moviendo el detalle al tooltip.
+- [x] **T-015.** `toolTip` en todo control interactivo sin etiqueta.
+- [x] **T-016.** Clase `peligro` en los botones que destruyen datos.
+- [x] **T-017.** Ninguna fila horizontal de nivel superior con más de 5 widgets.
 
 ## Fase H — Barra de estado
 
-- [ ] **T-018.** `MainWindow._estado(texto, ok)` con color `suave`/`acento`.
-- [ ] **T-019.** Mensajes distintos por paso y por resultado; sin repetir la etiqueta de la pestaña.
+- [x] **T-018.** `MainWindow._estado(texto, ok)` con color `suave`/`acento`.
+- [x] **T-019.** Mensajes distintos por paso y por resultado; sin repetir la etiqueta de la pestaña.
 
 ## Fase I — Tests
 
-- [ ] **T-020.** `tests/test_estados_ui.py`:
+- [x] **T-020.** `tests/test_estados_ui.py`:
   - C-001: recuento exacto de controles deshabilitados en Preprocesamiento sin datos.
   - C-002: sin numéricas, `cb_num` deshabilitado y `cb_cat` habilitado.
   - C-003: idempotencia de `_update_enabled_state()` en las cinco pestañas.
@@ -61,15 +61,15 @@ Estado: **esperando puerta 2**. Depende de SDD-007 y SDD-008.
 
 ## Fase J — Documentación
 
-- [ ] **T-021.** `AGENTS.md`: la regla de que el estado de los controles se deriva solo de `AppState`.
-- [ ] **T-022.** `README.md`: sección «Controles activos y por qué».
-- [ ] **T-023.** `specs/README.md`: roadmap 009.
+- [x] **T-021.** `AGENTS.md`: la regla de que el estado de los controles se deriva solo de `AppState`.
+- [x] **T-022.** `README.md`: sección «Controles activos y por qué».
+- [x] **T-023.** `specs/README.md`: roadmap 009.
 
 ## Fase K — Verificación
 
-- [ ] **T-024.** `black` e `isort` solo sobre los ficheros tocados.
-- [ ] **T-025.** `pytest -q` en verde.
-- [ ] **T-026.** `grep -R "PySide6\|PyQt\|from ui\." core/` vacío.
+- [x] **T-024.** `black` e `isort` solo sobre los ficheros tocados.
+- [x] **T-025.** `pytest -q` en verde.
+- [x] **T-026.** `grep -R "PySide6\|PyQt\|from ui\." core/` vacío.
 
 ## Criterios cubiertos
 

@@ -85,7 +85,7 @@ separador del CSV exportado.
 | 006 | puerta 1 superada | implementado | implementado |
 | 007 | puerta 1 superada | implementado | implementado |
 | 008 | puerta 1 superada | implementado | implementado |
-| 009 | puerta 1 superada | escrito | escrito |
+| 009 | puerta 1 superada | implementado | implementado |
 
 ### Desviaciones registradas en 006
 

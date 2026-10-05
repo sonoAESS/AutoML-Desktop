@@ -72,6 +72,15 @@ separador del CSV exportado.
 | 001 | puerta 1 superada | implementado | implementado |
 | 002 | puerta 1 superada (R-005 corregido) | escrito | escrito |
 | 003 | puerta 1 superada | implementado | implementado |
+| 004 | puerta 1 superada | escrito | escrito |
+| 005 | puerta 1 superada | escrito | escrito |
+| 006 | puerta 1 superada | implementado | implementado |
+| 007 | puerta 1 superada | implementado | implementado |
+| 008 | puerta 1 superada | implementado | implementado |
+| 009 | puerta 1 superada | implementado | implementado |
+| 010 | puerta 1 superada | implementado | implementado |
+| 011 | puerta 1 superada | implementado | implementado |
+| 012 | puerta 1 superada (MLP excluido por el usuario) | implementado | implementado |
 
 ### Desviaciones registradas en 003
 
@@ -82,14 +91,18 @@ separador del CSV exportado.
 | `decision_function` | Se admite: si existe y no hay `predict_proba`, se usa (con `scores.ndim == 1` convertido a dos columnas). El diseño lo pedía para modelos sin probabilidad. |
 | `summarize_metrics` | Devuelve `[]` para un diccionario con solo claves de control (`auc_disponible`, `n_test`, `best_params`): son para la interfaz, no texto de métrica. Es justo el test que garantiza que un `bool` no acabe impreso como `1.0000`. |
 | `n_test` | Se añadió a los dos tipos de tarea; el diseño solo lo pedía en clasificación. Es información gratuita y la tabla de resultados la muestra. |
-| 004 | puerta 1 superada | escrito | escrito |
-| 005 | puerta 1 superada | escrito | escrito |
-| 006 | puerta 1 superada | implementado | implementado |
-| 007 | puerta 1 superada | implementado | implementado |
-| 008 | puerta 1 superada | implementado | implementado |
-| 009 | puerta 1 superada | implementado | implementado |
-| 010 | puerta 1 superada | implementado | implementado |
-| 011 | puerta 1 superada | implementado | implementado |
+
+### Desviaciones registradas en 012
+
+| Tema | Decisión tomada al implementar |
+|---|---|
+| `_HIST_PARAMS` | El diseño anunciaba 216 combinaciones, pero `max_depth` tenía 4 valores y no 3: con `class_weight` el modelo llegaba a **864**. Se ajustaron `learning_rate` a 3 valores y `min_samples_leaf` a 2, y quedó en 432. |
+| `LinearDiscriminant` | El diseño cruzaba `solver` × `shrinkage`, pero `svd` no acepta `shrinkage`: 2 de 6 combinaciones lanzaban `NotImplementedError` siempre, y en una búsqueda eso es un `NaN` silencioso. `solver="lsqr"` queda fijo en el factory y solo `shrinkage` se busca. |
+| `KernelRidge` | El diseño copiaba `gamma=("scale", "auto")` del `SVC`. En `KernelRidge` `gamma` es un `float` o `None`, así que las 6 combinaciones fallaban. Ahora es `(0.01, 0.1, 1.0)`. |
+| `LinearSVC` | Con la `hinge` por defecto y `C=100` liblinear no converge ni con 10000 iteraciones. Se fija `squared_hinge` y `loss` sale del grid. |
+| `RadiusNeighbors` | El radio por defecto de scikit-learn (1.0) deja muestras sin vecinos con datos sin escalar y predice `NaN`. El factory usa `radius=5.0` y el grid `(2.0, 5.0, 10.0)`. |
+| Recuento de regresores | El diseño decía 11 nuevos y 17 en total; son **12** nuevos y **18** en total. El error estaba en el recuento de la spec, no en el código. |
+| El grid como invariante | Se añadió `test_todas_las_combinaciones_del_grid_son_validas`, que ajusta las 1620 combinaciones del catálogo. Es lo que destapó los tres grids rotos anteriores. |
 
 ### Desviaciones registradas en 006
 

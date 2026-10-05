@@ -15,7 +15,7 @@ cabecera y como icono de la aplicación.
 
 | | | |
 |---|---|---|
-| `marino` `#12223b` | `azul_med` `#14448c` | `azul_clar` `#446dab` |
+| `marino` `#12223b` | `azul_med` `#14448c` | `lateral` `#24507f` |
 | `acento` `#d34223` | `oro` `#81660d` | `fondo` `#f3f4f7` |
 
 Los botones tienen tres clases —**principal**, secundario y de peligro— que se
@@ -283,22 +283,31 @@ Se abrirá la ventana principal con las cinco pestañas del flujo de trabajo.
 
 ## Modelos disponibles
 
-### Clasificación
+Son 17 clasificadores y 18 regresores de scikit-learn, agrupados en siete
+familias. Todos se pueden añadir al catálogo desde el desplegable de la
+pestaña de entrenamiento.
 
-- Regresión Logística
-- Árbol de Decisión
-- Random Forest
-- SVM (con probabilidad habilitada)
-- KNN
+### Clasificación (17)
 
-### Regresión
+| Familia           | Modelos                                                                                             |
+|-------------------|------------------------------------------------------------------------------------------------------|
+| Modelos lineales  | Regresión Logística, SGD                                                                            |
+| Árboles           | Árbol de Decisión                                                                                    |
+| Conjuntos         | Random Forest, ExtraTrees, Bagging, AdaBoost, GradientBoosting, HistGradientBoosting                   |
+| SVM               | SVM (con probabilidad habilitada), LinearSVC                                                        |
+| Vecinos           | KNN, RadiusNeighbors                                                                                  |
+| Naive Bayes       | GaussianNB, BernoulliNB                                                                              |
+| Discriminante     | LinearDiscriminant, QuadraticDiscriminant                                                           |
 
-- Regresión Lineal
-- Ridge
-- Árbol de Decisión
-- Random Forest
-- SVR
-- KNN
+### Regresión (18)
+
+| Familia           | Modelos                                                                                             |
+|-------------------|------------------------------------------------------------------------------------------------------|
+| Modelos lineales  | Regresión Lineal, Ridge, Lasso, ElasticNet, Huber, TheilSen, SGD                                    |
+| Árboles           | Árbol de Decisión                                                                                    |
+| Conjuntos         | Random Forest, ExtraTrees, Bagging, AdaBoost, GradientBoosting, HistGradientBoosting                   |
+| SVM               | SVR, KernelRidge                                                                                     |
+| Vecinos           | KNN, RadiusNeighbors                                                                                  |
 
 Todos los modelos se envuelven en un `Pipeline` de scikit-learn que aplica
 las conversiones de tipo, la normalización elegida, la imputación y el one-hot
@@ -308,6 +317,24 @@ entrenamiento.
 
 El SVM usa `CalibratedClassifierCV` para ofrecer probabilidades sin depender
 de `probability=True`.
+
+Algunas decisiones del catálogo que conviene conocer, porque no son
+arbitrarias:
+
+- `class_weight="balanced"` solo se ofrece en los cuatro modelos que aceptan el
+  parámetro (`SGD`, `ExtraTrees`, `HistGradientBoosting` y `LinearSVC`). En
+  `Bagging`, `AdaBoost` o `GradientBoosting` scikit-learn lo ignora, así que
+  ofrecerlo sería dar al usuario una opción que no hace nada.
+- `LinearDiscriminant` usa siempre el solucionador `lsqr`: es el que admite
+  `shrinkage`, y `svd` no lo acepta. Un grid con ambos cruzados llenaría la
+  búsqueda de combinaciones que fallan.
+- `LinearSVC` usa `squared_hinge` con 3000 iteraciones. Con la `hinge` por
+  defecto y `C=100`, liblinear no converge ni con 10000 iteraciones.
+- `RadiusNeighbors` arranca con un radio de 5.0. Con el radio por defecto de
+  scikit-learn (1.0) hay muestras sin ningún vecino dentro del radio, y sus
+  predicciones salen como `NaN`.
+- Ningún grid supera las 432 combinaciones: una búsqueda exhaustiva sobre miles
+  de combinaciones tarda más de lo que un usuario de escritorio tolera.
 
 ### Métricas reportadas
 

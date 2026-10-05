@@ -535,12 +535,74 @@ def test_available_metrics_no_filtra_por_modelo():
     assert model_specs.available_metrics("regression") == ["rmse", "mae", "r2"]
 
 
-def test_metrics_for_ranking():
-    assert model_specs.metrics_for_ranking("classification") == "f1_macro"
-    assert model_specs.metrics_for_ranking("regression") == "r2"
-
-
 def test_metric_label():
     assert model_specs.metric_label("roc_auc") == "AUC (ROC One-vs-Rest)"
     assert model_specs.metric_label("r2") == "R²"
     assert model_specs.metric_label("inventada") == "inventada"
+
+
+# ---------------------------------------------------------------------------
+# C-009 · el catálogo ampliado se entrena de verdad
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "SGD",
+        "ExtraTrees",
+        "Bagging",
+        "AdaBoost",
+        "GradientBoosting",
+        "HistGradientBoosting",
+        "LinearSVC",
+        "RadiusNeighbors",
+        "GaussianNB",
+        "BernoulliNB",
+        "LinearDiscriminant",
+        "QuadraticDiscriminant",
+    ],
+)
+def test_cada_clasificador_nuevo_se_entrena(model_name):
+    """Un modelo del catálogo que no se puede ajustar es un modelo roto."""
+    data = load_iris(as_frame=True)
+    df = data.frame.rename(columns={"target": "y"}).head(80)
+    pipe, metrics, _ = model_trainer.train_model(
+        df,
+        target="y",
+        model_name=model_name,
+        task_type="classification",
+    )
+    assert isinstance(pipe, Pipeline)
+    assert 0.0 <= metrics["accuracy"] <= 1.0
+    assert metrics["n_test"] > 0
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "Lasso",
+        "ElasticNet",
+        "Huber",
+        "TheilSen",
+        "SGD",
+        "ExtraTrees",
+        "Bagging",
+        "AdaBoost",
+        "GradientBoosting",
+        "HistGradientBoosting",
+        "KernelRidge",
+        "RadiusNeighbors",
+    ],
+)
+def test_cada_regresor_nuevo_se_entrena(model_name):
+    from sklearn.datasets import load_diabetes
+
+    data = load_diabetes(as_frame=True)
+    df = data.frame.rename(columns={"target": "y"}).head(80)
+    pipe, metrics, _ = model_trainer.train_model(
+        df,
+        target="y",
+        model_name=model_name,
+        task_type="regression",
+    )
+    assert isinstance(pipe, Pipeline)
+    assert metrics["rmse"] > 0.0

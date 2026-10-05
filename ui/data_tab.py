@@ -141,6 +141,11 @@ class DataTab(QWidget):
             f"{origen} · {info['n_rows']} filas · {info['n_cols']} columnas · "
             f"{info['missing']} valores nulos"
         )
+        # `load_data` no pasa por `refresh()`: si no, la vista previa se llena
+        # pero sigue oculta detrás del estado vacío, y los botones que ya
+        # deberían estar disponibles siguen apagados.
+        self._update_enabled_state()
+        self._alternar_vacio()
         self.data_loaded.emit()
 
     def refresh(self):

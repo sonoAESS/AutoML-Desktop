@@ -169,8 +169,10 @@ class PredictTab(QWidget):
             "Columnas requeridas: " + ", ".join(bundle.metadata.feature_columns)
         )
         self.btn_load_data.setEnabled(True)
-        self.btn_predict.setEnabled(True)
         self._clear_predictions()
+        # El estado de los botones se recalcula entero aquí: mantener un
+        # `setEnabled(True)` suelto duplicaba la regla de `_update_enabled_state`.
+        self.refresh()
 
         if bundle.dataset is not None:
             self.lbl_modelo.setText(
@@ -211,6 +213,7 @@ class PredictTab(QWidget):
             self.lbl_datos.setStyleSheet("")
         self._fill_table(self.table_entrada, df, max_rows=100)
         self._clear_predictions()
+        self.refresh()
 
     # ------------------------------------------------------------------
     def refresh(self):
@@ -307,7 +310,7 @@ class PredictTab(QWidget):
         self._preview = frame[columnas_nuevas]
         self._predictions = frame
         self._fill_table(self.table_salida, self._preview, max_rows=500)
-        self.btn_export.setEnabled(True)
+        self.refresh()
         self.lbl_resultado.setText(
             f"{len(frame)} filas predichas · {len(self._input_df.columns)} columnas "
             f"de entrada + {len(columnas_nuevas)} de predicción "
@@ -363,6 +366,7 @@ class PredictTab(QWidget):
             entrada[columna] = self._predictions[columna].values
         self._input_df = entrada
         self._fill_table(self.table_entrada, entrada, max_rows=100)
+        self.refresh()
         self.lbl_resultado.setText(
             "Predicción añadida al dataset. Ya puedes exportarlo con "
             "«Exportar resultados»."

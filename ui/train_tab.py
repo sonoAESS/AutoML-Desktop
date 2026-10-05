@@ -689,7 +689,11 @@ class TrainTab(QWidget):
 
     def _on_seleccion_terminada(self):
         self.progress.setVisible(False)
-        self.btn_analizar.setEnabled(self.chk_seleccion.isChecked())
+        # Antes era `setEnabled(chk_seleccion.isChecked())`, una copia de la
+        # regla de `_update_enabled_state` que se olvidaría en cuanto cambiara
+        # la condición.
+        self._update_enabled_state()
+        self._alternar_vacio()
 
     def _pintar_seleccion(self, tabla):
         """Rellena la tabla; lo no seleccionado se muestra atenuado."""

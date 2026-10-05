@@ -407,6 +407,10 @@ class PreprocessTab(QWidget):
                 "junto al modelo)."
             )
             self._fill_normalizations()
+            # Aplicar puede dejar columnas fuera, así que las estrategias
+            # habilitadas se recalculan con los perfiles nuevos.
+            self._update_enabled_state()
+            self._alternar_vacio()
             self.data_processed.emit()
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))

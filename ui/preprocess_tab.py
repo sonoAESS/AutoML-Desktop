@@ -13,12 +13,14 @@ from PySide6.QtWidgets import (
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
+    QToolBox,
     QVBoxLayout,
     QWidget,
 )
 
 from core import balancing, preprocessor, profiling
-from ui.theme import marcar
+from ui.layout import acotar_tabla
+from ui.theme import ESPACIOS, marcar
 
 METHOD_LABELS = {
     "none": "sin normalizar",
@@ -40,14 +42,29 @@ class PreprocessTab(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self):
+        """Acordeón de bloques + acciones siempre visibles.
+
+        Los seis grupos medían unos 800 px seguidos, así que había que hacer
+        scroll para llegar al botón «Aplicar». En un acordeón cabe un bloque y
+        el botón, que es lo que cierra el paso.
+        """
         layout = QVBoxLayout(self)
+
+        self.grupos = QToolBox()
+        layout.addWidget(self.grupos, 1)
+
+        # Página «Calidad»: duplicados y nulos van juntos porque los dos
+        # limpian el dataset y seleienden a la vez.
+        self.calidad = QWidget()
+        v_calidad = QVBoxLayout(self.calidad)
+        v_calidad.setContentsMargins(0, 0, 0, 0)
+        v_calidad.setSpacing(ESPACIOS["sm"])
 
         gb_dups = QGroupBox("Duplicados")
         v = QVBoxLayout(gb_dups)
         self.chk_dups = QCheckBox("Eliminar filas duplicadas")
         self.chk_dups.setChecked(True)
         v.addWidget(self.chk_dups)
-        layout.addWidget(gb_dups)
 
         gb_null = QGroupBox("Valores nulos")
         v = QVBoxLayout(gb_null)
@@ -62,7 +79,8 @@ class PreprocessTab(QWidget):
         v.addWidget(self.cmb_num)
         v.addWidget(QLabel("Estrategia categórica:"))
         v.addWidget(self.cmb_cat)
-        layout.addWidget(gb_null)
+        v_calidad.addWidget(gb_dups)
+        v_calidad.addWidget(gb_null)
 
         gb_tipos = QGroupBox("Tipos de datos y fechas")
         v = QVBoxLayout(gb_tipos)
@@ -71,7 +89,6 @@ class PreprocessTab(QWidget):
         v.addWidget(self.lbl_tipos)
         self.chk_dates = QCheckBox("Convertir las fechas en año, mes y día")
         v.addWidget(self.chk_dates)
-        layout.addWidget(gb_tipos)
 
         gb_norm = QGroupBox("Normalización de variables numéricas")
         v = QVBoxLayout(gb_norm)
@@ -82,15 +99,15 @@ class PreprocessTab(QWidget):
         )
         self.table_norm.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table_norm.verticalHeader().setVisible(False)
+        acotar_tabla(self.table_norm)
         v.addWidget(self.table_norm)
-        layout.addWidget(gb_norm)
 
         gb_cols = QGroupBox("Columnas a eliminar")
         v = QVBoxLayout(gb_cols)
         self.list_cols = QListWidget()
+        acotar_tabla(self.list_cols)
         self.list_cols.setSelectionMode(QListWidget.MultiSelection)
         v.addWidget(self.list_cols)
-        layout.addWidget(gb_cols)
 
         self.gb_distribucion = QGroupBox("Distribución de clases")
         v = QVBoxLayout(self.gb_distribucion)
@@ -104,17 +121,29 @@ class PreprocessTab(QWidget):
             0, QHeaderView.Stretch
         )
         self.tbl_distribucion.verticalHeader().setVisible(False)
+        acotar_tabla(self.tbl_distribucion)
         v.addWidget(self.tbl_distribucion)
-        layout.addWidget(self.gb_distribucion)
 
         self.btn_apply = QPushButton("Aplicar preprocesamiento")
         marcar(self.btn_apply, "primario")
+        self.btn_apply.setMaximumWidth(260)
         self.btn_apply.clicked.connect(self.apply)
         layout.addWidget(self.btn_apply)
 
         self.lbl_result = QLabel("")
         self.lbl_result.setWordWrap(True)
+        self.lbl_result.setProperty("role", "suave")
         layout.addWidget(self.lbl_result)
+
+        # --- montaje del acordeón ---
+        self.grupos.addItem(self.calidad, "Calidad (duplicados y nulos)")
+        self.grupos.addItem(gb_tipos, "Tipos de datos y fechas")
+        self.grupos.addItem(gb_norm, "Normalización de variables")
+        self.grupos.addItem(gb_cols, "Columnas a eliminar")
+        # La distribución informa en lugar de configurar: se deja visible,
+        # pero dentro del acordeón para no romper el flujo de lectura.
+        self.grupos.addItem(self.gb_distribucion, "Distribución de clases")
+        self._pagina_distribucion = self.grupos.indexOf(self.gb_distribucion)
 
     # ------------------------------------------------------------------
     def refresh(self):

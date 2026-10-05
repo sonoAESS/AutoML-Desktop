@@ -15,12 +15,14 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QToolBox,
     QVBoxLayout,
     QWidget,
 )
 
 from core import balancing, feature_selection, model_specs, model_trainer, profiling
-from ui.theme import marcar
+from ui.layout import acotar_tabla
+from ui.theme import ESPACIOS, marcar
 from ui.workers import SelectionWorker, TuneWorker, WorkerThread
 
 TASK_LABELS = {
@@ -51,7 +53,23 @@ class TrainTab(QWidget):
 
     # ------------------------------------------------------------------
     def _build_ui(self):
+        """Acordeón de configuración + acción principal siempre visible.
+
+        Los cinco bloques sumaban más de 900 px seguidos y el botón
+        «Entrenar modelo» quedaba por debajo del borde de la ventana. Con el
+        acordeón el botón está siempre a la vista, que es lo que importa.
+        """
         layout = QVBoxLayout(self)
+
+        self.grupos = QToolBox()
+        layout.addWidget(self.grupos, 1)
+
+        # --- página «Modelo» ---
+        self.pagina_modelo = QWidget()
+        v_modelo = QVBoxLayout(self.pagina_modelo)
+        v_modelo.setContentsMargins(0, 0, 0, 0)
+        v_modelo.setSpacing(ESPACIOS["sm"])
+
         form = QFormLayout()
 
         self.cmb_target = QComboBox()
@@ -66,21 +84,22 @@ class TrainTab(QWidget):
         form.addRow("Tipo de tarea:", self.cmb_task)
         form.addRow("Familia de modelo:", self.cmb_family)
         form.addRow("Modelo:", self.cmb_model)
-        layout.addLayout(form)
+        v_modelo.addLayout(form)
 
         self.lbl_compatibilidad = QLabel("")
         self.lbl_compatibilidad.setWordWrap(True)
-        layout.addWidget(self.lbl_compatibilidad)
+        v_modelo.addWidget(self.lbl_compatibilidad)
 
         self.lbl_modelo = QLabel("")
         self.lbl_modelo.setWordWrap(True)
-        layout.addWidget(self.lbl_modelo)
+        self.lbl_modelo.setProperty("role", "suave")
+        v_modelo.addWidget(self.lbl_modelo)
+        v_modelo.addStretch()
 
         gb_params = QGroupBox("Hiperparámetros del modelo")
         grid = QGridLayout(gb_params)
         self.grid_params = grid
         self.gb_params = gb_params
-        layout.addWidget(gb_params)
 
         gb_tune = QGroupBox("Búsqueda de hiperparámetros")
         form_tune = QFormLayout(gb_tune)
@@ -100,7 +119,14 @@ class TrainTab(QWidget):
         form_tune.addRow("Iteraciones (si es aleatoria):", self.spn_iter)
         form_tune.addRow("Métrica a optimizar:", self.cmb_metric)
         self.gb_tune = gb_tune
-        layout.addWidget(gb_tune)
+
+        self.pagina_ajustes = QWidget()
+        v_ajustes = QVBoxLayout(self.pagina_ajustes)
+        v_ajustes.setContentsMargins(0, 0, 0, 0)
+        v_ajustes.setSpacing(ESPACIOS["sm"])
+        v_ajustes.addWidget(gb_params)
+        v_ajustes.addWidget(gb_tune)
+        v_ajustes.addStretch()
 
         gb_balanceo = QGroupBox("Balanceo de clases")
         form_balanceo = QFormLayout(gb_balanceo)
@@ -114,7 +140,6 @@ class TrainTab(QWidget):
         form_balanceo.addRow("Estrategia:", self.cmb_balancing)
         form_balanceo.addRow("Vecinos (SMOTE):", self.spn_vecinos)
         self.gb_balanceo = gb_balanceo
-        layout.addWidget(gb_balanceo)
 
         gb_seleccion = QGroupBox("Selección de atributos")
         v_seleccion = QVBoxLayout(gb_seleccion)
@@ -152,12 +177,13 @@ class TrainTab(QWidget):
             0, QHeaderView.Stretch
         )
         self.tbl_seleccion.verticalHeader().setVisible(False)
+        acotar_tabla(self.tbl_seleccion)
         v_seleccion.addWidget(self.tbl_seleccion)
         self.gb_seleccion = gb_seleccion
-        layout.addWidget(gb_seleccion)
 
         self.btn_train = QPushButton("Entrenar modelo")
         marcar(self.btn_train, "primario")
+        self.btn_train.setMaximumWidth(240)
         self.btn_train.clicked.connect(self.train)
         layout.addWidget(self.btn_train)
 
@@ -176,6 +202,20 @@ class TrainTab(QWidget):
         self.lbl_result = QLabel("")
         self.lbl_result.setWordWrap(True)
         layout.addWidget(self.lbl_result)
+
+        # --- montaje del acordeón ---
+        # Solo se muestran las páginas con contenido real: una página de
+        # «balanceo» vacía en un problema de regresión no informa de nada.
+        self._paginas_grupo = (
+            (self.pagina_modelo, "Qué modelo entrenar"),
+            (self.pagina_ajustes, "Hiperparámetros"),
+            (gb_balanceo, "Balanceo de clases"),
+            (gb_seleccion, "Selección de atributos"),
+        )
+        for widget, titulo in self._paginas_grupo:
+            self.grupos.addItem(widget, titulo)
+        self._pagina_balanceo = self.grupos.indexOf(gb_balanceo)
+        self._pagina_seleccion = self.grupos.indexOf(gb_seleccion)
 
         self.cmb_target.currentIndexChanged.connect(self._on_target_changed)
         self.cmb_task.currentIndexChanged.connect(self._on_task_changed)

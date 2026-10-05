@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, profiling
 from ui import file_dialogs
+from ui.empty_state import EmptyState, alternar_estado_vacio
 from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 
@@ -96,8 +97,16 @@ class DataTab(QWidget):
         acotar_tabla(self.table)
         layout.addWidget(self.table)
 
+        self.vacio = EmptyState(
+            "No hay ningún archivo cargado",
+            "La aplicación necesita un CSV o un Excel para empezar.",
+            "Carga un archivo en el paso 1",
+        )
+        layout.addWidget(self.vacio, 1)
+
         # ------------------------------------------------------------------
         self._update_enabled_state()
+        self._alternar_vacio()
 
     def load_data(self):
         """Abre un fichero CSV/Excel/ODS y lo deja como `raw_df`."""
@@ -139,6 +148,13 @@ class DataTab(QWidget):
         self._show_profile()
         self._show_summary()
         self._update_enabled_state()
+        self._alternar_vacio()
+
+    # ------------------------------------------------------------------
+    def _alternar_vacio(self):
+        """Dos tablas vacías parecen una aplicación rota: el mensaje dice qué falta."""
+        vacio = self.state.raw_df is None
+        alternar_estado_vacio(self.vacio, (self.table, self.table_perfil), vacio)
 
     # ------------------------------------------------------------------
     def _update_enabled_state(self):

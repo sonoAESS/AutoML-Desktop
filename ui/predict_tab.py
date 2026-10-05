@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, persistence
 from ui import file_dialogs
+from ui.empty_state import EmptyState, alternar_estado_vacio
 from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 from ui.theme import marcar
@@ -93,6 +94,14 @@ class PredictTab(QWidget):
         v.addWidget(self.table_entrada)
         layout.addWidget(gb_datos)
 
+        self.vacio = EmptyState(
+            "No hay ningún modelo cargado",
+            "Para predecir hace falta un proyecto .automl con el modelo "
+            "entrenado, sus metadatos y el preprocesamiento que usó.",
+            "Carga un modelo en el paso 5, o entrena uno en el paso 3",
+        )
+        layout.addWidget(self.vacio, 1)
+
         self.btn_predict = QPushButton("Aplicar el modelo")
         self.btn_predict.setEnabled(False)
         self.btn_predict.clicked.connect(self.predict)
@@ -128,6 +137,7 @@ class PredictTab(QWidget):
 
         # Sin modelo cargado no se puede predecir.
         self._update_enabled_state()
+        self._alternar_vacio()
 
     # ------------------------------------------------------------------
     def load_bundle(self):
@@ -206,6 +216,31 @@ class PredictTab(QWidget):
     def refresh(self):
         """Reevalúa qué se puede hacer con el modelo y los datos cargados."""
         self._update_enabled_state()
+        self._alternar_vacio()
+
+    def _alternar_vacio(self):
+        """El mensaje cambia según falte el modelo o los datos."""
+        if self.state.bundle is None:
+            self.vacio.set_text(
+                "No hay ningún modelo cargado",
+                "Para predecir hace falta un proyecto .automl con el modelo "
+                "entrenado, sus metadatos y el preprocesamiento que usó.",
+                "Carga un modelo en el paso 5, o entrena uno en el paso 3",
+            )
+            vacio = True
+        elif self._input_df is None:
+            self.vacio.set_text(
+                "Faltan los datos a predecir",
+                "El modelo ya está cargado. Falta el archivo con las filas "
+                "que quieres clasificar o de las que quieres obtener el valor.",
+                "Carga un CSV en el paso 5",
+            )
+            vacio = True
+        else:
+            vacio = False
+        alternar_estado_vacio(
+            self.vacio, (self.table_entrada, self.table_salida), vacio
+        )
 
     def _update_enabled_state(self):
         """Aplicar el modelo exige modelo **y** datos de entrada.

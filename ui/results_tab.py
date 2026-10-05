@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from sklearn.metrics import ConfusionMatrixDisplay
 
 from core import model_specs, model_trainer, persistence
+from ui.empty_state import EmptyState, alternar_estado_vacio
 from ui.enabled import con_pista
 from ui.layout import acotar_tabla, expandir_canvas
 from ui.theme import marcar
@@ -92,6 +93,14 @@ class ResultsTab(QWidget):
         self.lbl = QLabel("Sin resultados todavía.")
         self.lbl.setWordWrap(True)
         v_metricas.addWidget(self.lbl)
+
+        self.vacio = EmptyState(
+            "Todavía no hay un modelo entrenado",
+            "Aquí aparecerán las métricas del modelo, la curva ROC, la matriz "
+            "de confusión y la importancia de cada variable.",
+            "Entrena un modelo en el paso 3",
+        )
+        v_metricas.addWidget(self.vacio, 1)
 
         self.tbl_metricas = QTableWidget(0, 2)
         self.tbl_metricas.setHorizontalHeaderLabels(["Métrica", "Valor"])
@@ -175,6 +184,7 @@ class ResultsTab(QWidget):
 
         # Estado inicial: sin modelo no se puede guardar nada.
         self._update_enabled_state()
+        self._alternar_vacio()
 
     def _build_comparison_group(self):
         """Grupo «Comparativa de modelos (Friedman)», oculto sin datos."""
@@ -480,6 +490,7 @@ class ResultsTab(QWidget):
     def refresh(self):
         self._update_enabled_state()
         self._refresh_comparativa_disponibilidad()
+        self._alternar_vacio()
         if self.state.comparison is not None:
             self._show_comparison(self.state.comparison)
         metrics = self.state.metrics
@@ -493,6 +504,14 @@ class ResultsTab(QWidget):
         # Sin esto las etiquetas largas (nombres de atributo, clases) se cortan.
         self.figure.tight_layout()
         self.canvas.draw()
+
+    # ------------------------------------------------------------------
+    def _alternar_vacio(self):
+        """Sin modelo, una tabla de métricas vacía no explica nada."""
+        hay_datos = bool(self.state.metrics)
+        alternar_estado_vacio(
+            self.vacio, (self.lbl, self.tbl_metricas, self.canvas), not hay_datos
+        )
 
     # ------------------------------------------------------------------
     def _update_enabled_state(self):

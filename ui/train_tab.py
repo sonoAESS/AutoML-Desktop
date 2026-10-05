@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, feature_selection, model_specs, model_trainer, profiling
+from ui.empty_state import EmptyState, alternar_estado_vacio
 from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 from ui.theme import ESPACIOS, marcar
@@ -71,7 +72,24 @@ class TrainTab(QWidget):
         v_modelo.setContentsMargins(0, 0, 0, 0)
         v_modelo.setSpacing(ESPACIOS["sm"])
 
+        self.vacio = EmptyState(
+            "Faltan los datos ya limpiados",
+            "El entrenamiento usa el dataset del paso 2, no el original: así "
+            "el modelo ve exactamente los mismos datos sobre los que se "
+            "entrenó.",
+            "Aplica el preprocesamiento en el paso 2",
+        )
+        v_modelo.addWidget(self.vacio, 1)
+
         form = QFormLayout()
+
+        # El formulario y sus dos etiquetas van en un contenedor propio: un
+        # `QLayout` no se puede ocultar, así que hace falta un `QWidget` que
+        # los envuelva para alternar entre ellos y el mensaje.
+        self.bloque_modelo = QWidget()
+        v_bloque = QVBoxLayout(self.bloque_modelo)
+        v_bloque.setContentsMargins(0, 0, 0, 0)
+        v_bloque.setSpacing(ESPACIOS["sm"])
 
         self.cmb_target = QComboBox()
         self.cmb_task = QComboBox()
@@ -85,16 +103,17 @@ class TrainTab(QWidget):
         form.addRow("Tipo de tarea:", self.cmb_task)
         form.addRow("Familia de modelo:", self.cmb_family)
         form.addRow("Modelo:", self.cmb_model)
-        v_modelo.addLayout(form)
+        v_bloque.addLayout(form)
 
         self.lbl_compatibilidad = QLabel("")
         self.lbl_compatibilidad.setWordWrap(True)
-        v_modelo.addWidget(self.lbl_compatibilidad)
+        v_bloque.addWidget(self.lbl_compatibilidad)
 
         self.lbl_modelo = QLabel("")
         self.lbl_modelo.setWordWrap(True)
         self.lbl_modelo.setProperty("role", "suave")
-        v_modelo.addWidget(self.lbl_modelo)
+        v_bloque.addWidget(self.lbl_modelo)
+        v_modelo.addWidget(self.bloque_modelo)
         v_modelo.addStretch()
 
         gb_params = QGroupBox("Hiperparámetros del modelo")
@@ -241,6 +260,7 @@ class TrainTab(QWidget):
 
         # Sin dataset limpio todavía no se puede entrenar.
         self._update_enabled_state()
+        self._alternar_vacio()
 
     # ------------------------------------------------------------------
     def refresh(self):
@@ -248,6 +268,17 @@ class TrainTab(QWidget):
         self._refresh_balancing()
         self._refresh_seleccion()
         self._update_enabled_state()
+        self._alternar_vacio()
+
+    # ------------------------------------------------------------------
+    def _alternar_vacio(self):
+        """El formulario vacío (combos sin nada) no dice que falta el paso 2.
+
+        El acordeón y «Entrenar modelo» quedan fuera: son la acción, no el
+        contenido.
+        """
+        vacio = self.state.clean_df is None
+        alternar_estado_vacio(self.vacio, (self.bloque_modelo,), vacio)
 
     # ------------------------------------------------------------------
     def _update_enabled_state(self):

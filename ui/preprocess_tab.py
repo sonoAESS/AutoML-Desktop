@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, preprocessor, profiling
+from ui.empty_state import EmptyState, alternar_estado_vacio
 from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 from ui.theme import ESPACIOS, marcar
@@ -146,8 +147,26 @@ class PreprocessTab(QWidget):
         self.grupos.addItem(self.gb_distribucion, "Distribución de clases")
         self._pagina_distribucion = self.grupos.indexOf(self.gb_distribucion)
 
+        self.vacio = EmptyState(
+            "No hay datos que limpiar",
+            "Aquí se quitan duplicados, se rellenan huecos y se ajustan las "
+            "variables, pero hace falta un dataset de partida.",
+            "Vuelve al paso 1 y carga un archivo",
+        )
+        layout.insertWidget(0, self.vacio, 1)
+
         # Sin datos, ninguno de los grupos sirve todavía.
         self._update_enabled_state()
+        self._alternar_vacio()
+
+    # ------------------------------------------------------------------
+    def _alternar_vacio(self):
+        """Cinco grupos con todo apagado no dicen qué pasa: el mensaje sí.
+
+        `btn_apply` queda fuera a propósito: es la acción que cierra el paso y
+        su sitio no depende de si hay contenido que limpiar.
+        """
+        alternar_estado_vacio(self.vacio, (self.grupos,), self.state.raw_df is None)
 
     # ------------------------------------------------------------------
     def refresh(self):
@@ -156,6 +175,7 @@ class PreprocessTab(QWidget):
         self._fill_normalizations()
         self._show_distribution()
         self._update_enabled_state()
+        self._alternar_vacio()
 
     # ------------------------------------------------------------------
     def _update_enabled_state(self):

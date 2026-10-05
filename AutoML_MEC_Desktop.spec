@@ -23,7 +23,7 @@ exe = EXE(
     a.datas,
     [],
     name='AutoML_MEC_Desktop',
-    icon='resources/icono-app.svg',
+    icon='resources/icono-app.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

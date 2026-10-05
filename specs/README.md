@@ -58,8 +58,9 @@ se ejecutan en ese orden porque cada una usa lo que la anterior dejó.
 | [008](008-estructura-navegacion/spec.md) | Estructura, navegación y densidad | 2 | 007 |
 | [009](009-estados-y-densidad/spec.md) | Estados de los controles y densidad | 3 | 007, 008 |
 | [010](010-estados-vacios/spec.md) | Estados vacíos explicados | 4 | 007, 008, 009 |
+| [011](011-marca-visual-clara/spec.md) | Marca visual clara | 5 | — |
 
-Orden de ejecución: **001 → 006 → 003 → 004 → 002 → 005**.
+Orden de ejecución: **001 → 006 → 003 → 004 → 002 → 005 → 011**.
 
 001 va primero porque 006 reutiliza su `detect_separator` para elegir el
 separador del CSV exportado.
@@ -88,6 +89,7 @@ separador del CSV exportado.
 | 008 | puerta 1 superada | implementado | implementado |
 | 009 | puerta 1 superada | implementado | implementado |
 | 010 | puerta 1 superada | implementado | implementado |
+| 011 | puerta 1 superada | implementado | implementado |
 
 ### Desviaciones registradas en 006
 

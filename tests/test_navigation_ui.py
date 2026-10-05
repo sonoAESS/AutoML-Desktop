@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (  # noqa: E402
     QAbstractScrollArea,
     QApplication,
     QFrame,
+    QLabel,
     QListWidget,
     QPushButton,
     QScrollArea,
@@ -310,6 +311,24 @@ def test_la_ventana_no_necesita_mas_de_720_de_alto(ventana):
     ventana.ir_a_paso(0)
     QApplication.instance().processEvents()
     assert ventana.minimumSizeHint().height() <= 720
+
+
+def test_el_escudo_esta_centrado_en_la_barra(app):
+    """El escudo se centra respecto a la columna, no pegado al borde."""
+    from PySide6.QtCore import Qt
+
+    lateral = StepSidebar()
+    marca = lateral.findChildren(QLabel)[0]
+    assert marca.alignment() & Qt.AlignmentFlag.AlignHCenter
+    assert marca.alignment() & Qt.AlignmentFlag.AlignVCenter
+
+
+def test_el_texto_de_la_organizacion_no_se_duplica(app):
+    """«Ministerio de Educación Superior — Cuba» vive solo en el pie."""
+    lateral = StepSidebar()
+    textos = [w.text() for w in lateral.findChildren(QLabel)]
+    assert "Ministerio de Educación Superior — Cuba" in textos
+    assert "Ministerio de Educación Superior" not in textos
 
 
 # ----------------------------------------------------------------------

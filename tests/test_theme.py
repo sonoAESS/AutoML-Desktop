@@ -18,6 +18,21 @@ from ui import theme  # noqa: E402
 RAIZ = Path(__file__).resolve().parent.parent
 
 
+def _luminancia(hex_color: str) -> float:
+    """Luminancia relativa WCAG de un color `#rrggbb`."""
+    hex_color = hex_color.lstrip("#")
+    rgb = [int(hex_color[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    lineal = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    return 0.2126 * lineal[0] + 0.7152 * lineal[1] + 0.0722 * lineal[2]
+
+
+def _contraste(hex_a: str, hex_b: str) -> float:
+    """Razón de contraste WCAG entre dos colores."""
+    la, lb = _luminancia(hex_a), _luminancia(hex_b)
+    claro, oscuro = max(la, lb), min(la, lb)
+    return (claro + 0.05) / (oscuro + 0.05)
+
+
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
@@ -59,6 +74,28 @@ def test_el_titulo_de_la_marca_es_blanco_sobre_azul():
     bloque = qss.split("QLabel#marca_titulo")[1].split("}")[0]
     assert theme.COLORES["blanco"] in bloque
     assert "color: #000000" not in qss
+
+
+def test_el_fondo_de_la_barra_es_el_token_lateral():
+    """El fondo de la barra usa su propio token, no `marino`."""
+    assert theme.COLORES["lateral"] == "#24507f"
+    assert theme.COLORES["marino"] == "#12223b"
+    qss = theme.build_stylesheet()
+    assert f"QFrame#lateral {{ background-color: {theme.COLORES['lateral']}" in qss
+
+
+def test_el_texto_de_la_barra_supera_wcag_aa():
+    """Contraste calculado, no hardcodeado: si cambia el token, el test sigue
+    verificando la regla."""
+    fondo = theme.COLORES["lateral"]
+    assert _contraste(theme.COLORES["blanco"], fondo) >= 7.0
+    assert _contraste(theme.TONOS["sidebar_texto"], fondo) >= 4.5
+
+
+def test_el_escudo_se_muestra_a_64_px(app):
+    pixmap = theme.escudo_pixmap()
+    assert pixmap.height() == 64
+    assert pixmap.width() > 0
 
 
 def test_ningun_color_de_la_hoja_esta_fuera_de_los_tokens():
@@ -130,8 +167,28 @@ def test_el_icono_es_un_svg_valido():
     assert contenido.lstrip().startswith("<svg")
     assert "</svg>" in contenido
     # Hereda la paleta institucional, que es lo que lo hace coherente.
-    for color in ("#12223b", "#446dab", "#d34223"):
+    for color in ("#14448c", "#d34223"):
         assert color in contenido
+
+
+def test_el_icono_ico_tiene_los_siete_tamanos():
+    """PyInstaller en Windows necesita un .ico, no un .svg."""
+    from PIL import Image
+
+    ruta = Path(theme.resource_path("icono-app.ico"))
+    assert ruta.exists()
+    with Image.open(ruta) as img:
+        assert img.format == "ICO"
+        tamanos = set(img.ico.sizes())
+    assert tamanos == {
+        (16, 16),
+        (24, 24),
+        (32, 32),
+        (48, 48),
+        (64, 64),
+        (128, 128),
+        (256, 256),
+    }
 
 
 def test_resource_path_funciona_en_modo_compilado(monkeypatch, tmp_path):

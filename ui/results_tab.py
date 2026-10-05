@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from sklearn.metrics import ConfusionMatrixDisplay
 
 from core import model_specs, model_trainer, persistence
+from ui.enabled import con_pista
 from ui.layout import acotar_tabla, expandir_canvas
 from ui.theme import marcar
 from ui.workers import ComparisonWorker, WorkerThread
@@ -140,10 +141,17 @@ class ResultsTab(QWidget):
         opciones.addStretch()
         v_exportar.addLayout(opciones)
 
-        self.btn_save = QPushButton("Guardar modelo y dataset (.automl)")
+        self.btn_save = QPushButton("Guardar proyecto")
+        self.btn_save.setToolTip(
+            "Guarda el modelo entrenado, el dataset transformado y los "
+            "metadatos en un único archivo .automl."
+        )
         marcar(self.btn_save, "primario")
         self.btn_save.clicked.connect(self.save_bundle)
-        self.btn_export = QPushButton("Exportar solo el dataset (CSV)")
+        self.btn_export = QPushButton("Exportar dataset")
+        self.btn_export.setToolTip(
+            "Exporta solo el dataset ya limpio, en CSV, sin el modelo."
+        )
         self.btn_export.clicked.connect(self.export_dataset)
         self.btn_load_in_predict = QPushButton("Ir a Predicción")
         self.btn_load_in_predict.clicked.connect(
@@ -165,6 +173,9 @@ class ResultsTab(QWidget):
         self.lbl_saved.setWordWrap(True)
         layout.addWidget(self.lbl_saved)
 
+        # Estado inicial: sin modelo no se puede guardar nada.
+        self._update_enabled_state()
+
     def _build_comparison_group(self):
         """Grupo «Comparativa de modelos (Friedman)», oculto sin datos."""
         gb = QGroupBox("Comparativa de modelos (Friedman)")
@@ -180,6 +191,10 @@ class ResultsTab(QWidget):
             "repeticiones de 5 folds son 15 ajustes por modelo: puede tardar."
         )
         self.chk_todos_los_modelos = QCheckBox("Todos los modelos compatibles")
+        self.chk_todos_los_modelos.setToolTip(
+            "Compara todos los modelos que el dataset admite. Si lo "
+            "desmarcas, solo se compara la familia del modelo actual."
+        )
         self.chk_todos_los_modelos.setChecked(True)
         self.chk_todos_los_modelos.toggled.connect(self._on_alcance_comparativa)
         opciones.addWidget(QLabel("Métrica:"))
@@ -190,7 +205,12 @@ class ResultsTab(QWidget):
         opciones.addStretch()
         v.addLayout(opciones)
 
-        self.btn_comparar = QPushButton("Comparar modelos compatibles")
+        self.btn_comparar = QPushButton("Comparar modelos")
+        self.btn_comparar.setToolTip(
+            "Evalúa todos los modelos compatibles sobre los mismos folds y "
+            "calcula el test de Friedman para ver si las diferencias son "
+            "reales."
+        )
         marcar(self.btn_comparar, "primario")
         self.btn_comparar.clicked.connect(self.comparar_modelos)
         self.btn_comparar.setEnabled(False)
@@ -458,6 +478,7 @@ class ResultsTab(QWidget):
 
     # ------------------------------------------------------------------
     def refresh(self):
+        self._update_enabled_state()
         self._refresh_comparativa_disponibilidad()
         if self.state.comparison is not None:
             self._show_comparison(self.state.comparison)
@@ -472,6 +493,43 @@ class ResultsTab(QWidget):
         # Sin esto las etiquetas largas (nombres de atributo, clases) se cortan.
         self.figure.tight_layout()
         self.canvas.draw()
+
+    # ------------------------------------------------------------------
+    def _update_enabled_state(self):
+        """Guardar, exportar e ir a predicción exigen un modelo entrenado.
+
+        Antes los tres botones se podían pulsar sin modelo, y el usuario
+        descubría el problema con un `QMessageBox` en vez de con el propio
+        aspecto del botón.
+        """
+        hay_modelo = self.state.pipeline is not None
+        sin_modelo = "Entrena un modelo primero para poder guardarlo."
+        con_pista(
+            self.btn_save,
+            hay_modelo,
+            (
+                "Guarda el modelo, el dataset transformado y los metadatos en un "
+                "único archivo .automl."
+                if hay_modelo
+                else sin_modelo
+            ),
+        )
+        con_pista(
+            self.btn_export,
+            hay_modelo,
+            "Exporta solo el dataset ya limpio, en CSV." if hay_modelo else sin_modelo,
+        )
+        con_pista(
+            self.btn_load_in_predict,
+            hay_modelo,
+            (
+                "Lleva este modelo a la pestaña de Predicción para aplicarlo a "
+                "datos nuevos."
+                if hay_modelo
+                else sin_modelo
+            ),
+        )
+        self.tbl_metricas.setEnabled(hay_modelo)
 
     def _show_metrics(self, metrics):
         """Tabla Métrica/Valor con `n/d` y motivo cuando algo no existe."""

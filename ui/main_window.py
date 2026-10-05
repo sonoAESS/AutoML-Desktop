@@ -21,7 +21,7 @@ from ui.predict_tab import PredictTab
 from ui.preprocess_tab import PreprocessTab
 from ui.results_tab import ResultsTab
 from ui.sidebar import INDICE_POR_NOMBRE, StepSidebar
-from ui.theme import ESPACIOS, NOMBRE_APP, icono_app
+from ui.theme import COLORES, ESPACIOS, NOMBRE_APP, icono_app
 from ui.train_tab import TrainTab
 
 #: Tamaño inicial y mínimo. 1366×768 es la resolución de portátil más común en
@@ -176,27 +176,37 @@ class MainWindow(QMainWindow):
         self.sidebar.marcar_completado(indice)
 
     # ------------------------------------------------------------------
+    def _estado(self, texto: str, ok: bool = True) -> None:
+        """Escribe en la barra de estado, distinguiendo éxito de fallo.
+
+        No se usa para errores: esos siguen yendo por `QMessageBox`
+        (AGENTS §5.2), que el usuario no puede ignorar por accidente.
+        """
+        self.statusBar().showMessage(texto)
+        color = COLORES["suave"] if ok else COLORES["acento"]
+        self.statusBar().setStyleSheet(f"color: {color};")
+
     def _on_data_loaded(self):
         self.completar_paso(0)
         self.preprocess_tab.refresh()
         self.train_tab.refresh()
-        self.statusBar().showMessage("Datos cargados")
+        self._estado("Datos cargados. Revisa el perfil y sigue al paso 2.")
 
     def _on_profile_changed(self):
         self.preprocess_tab.refresh()
         self.train_tab.refresh()
-        self.statusBar().showMessage("Tipos de datos actualizados")
+        self._estado("Tipos de datos actualizados.")
 
     def _on_data_processed(self):
         self.completar_paso(1)
         self.train_tab.refresh()
-        self.statusBar().showMessage("Dataset preprocesado listo para entrenar")
+        self._estado("Dataset preprocesado. Ya puedes entrenar en el paso 3.")
 
     def _on_model_trained(self):
         self.completar_paso(2)
         self.completar_paso(3)
         self.results_tab.refresh()
-        self.statusBar().showMessage("Modelo entrenado")
+        self._estado("Modelo entrenado. Mira las métricas en el paso 4.")
 
     def _on_model_saved(self, ruta):
-        self.statusBar().showMessage(f"Modelo guardado en {ruta}")
+        self._estado(f"Proyecto guardado en {ruta}")

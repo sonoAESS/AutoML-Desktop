@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core import balancing, feature_selection, model_specs, model_trainer, profiling
+from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 from ui.theme import ESPACIOS, marcar
 from ui.workers import SelectionWorker, TuneWorker, WorkerThread
@@ -104,6 +105,10 @@ class TrainTab(QWidget):
         gb_tune = QGroupBox("Búsqueda de hiperparámetros")
         form_tune = QFormLayout(gb_tune)
         self.chk_tune = QCheckBox("Buscar la mejor combinación")
+        self.chk_tune.setToolTip(
+            "Prueba varias combinaciones de hiperparámetros y quédate con "
+            "la mejor. Tarda bastante más que un entrenamiento normal."
+        )
         self.cmb_search = QComboBox()
         self.cmb_search.addItem("Todas (grid)", "grid")
         self.cmb_search.addItem("Aleatoria (random)", "random")
@@ -144,6 +149,10 @@ class TrainTab(QWidget):
         gb_seleccion = QGroupBox("Selección de atributos")
         v_seleccion = QVBoxLayout(gb_seleccion)
         self.chk_seleccion = QCheckBox("Seleccionar solo los atributos más útiles")
+        self.chk_seleccion.setToolTip(
+            "Analiza qué atributos aportan al modelo y descarta los "
+            "débiles. Acelera el entrenamiento y suele mejorar laexactitud."
+        )
         self.chk_seleccion.toggled.connect(self._on_seleccion_toggled)
         v_seleccion.addWidget(self.chk_seleccion)
 
@@ -230,11 +239,59 @@ class TrainTab(QWidget):
         self._refresh_models()
         self._toggle_tune_options(False)
 
+        # Sin dataset limpio todavía no se puede entrenar.
+        self._update_enabled_state()
+
     # ------------------------------------------------------------------
     def refresh(self):
         self._reload_targets()
         self._refresh_balancing()
         self._refresh_seleccion()
+        self._update_enabled_state()
+
+    # ------------------------------------------------------------------
+    def _update_enabled_state(self):
+        """Activa lo que se puede usar con el estado actual.
+
+        «Entrenar modelo» exige dataset limpio, objetivo y modelo: antes se
+        podía pulsar sin modelo y el error salía como diálogo.
+
+        La búsqueda de hiperparámetros y los vecinos de SMOTE ya tenían su
+        propia lógica en `_toggle_tune_options` y `_refresh_balancing`; aquí
+        solo se recuerda el criterio para que las tres condiciones vivan en el
+        mismo sitio.
+        """
+        listo = bool(
+            self.state.clean_df is not None
+            and self.state.target_column
+            and self.state.model_name
+        )
+        con_pista(
+            self.btn_train,
+            listo,
+            (
+                "Entrena el modelo elegido con los datos ya preprocesados."
+                if listo
+                else (
+                    "Carga un dataset y preprocésalo para poder entrenar."
+                    if self.state.clean_df is None
+                    else "Elige la variable objetivo y el modelo que quieres entrenar."
+                )
+            ),
+        )
+        con_pista(
+            self.btn_analizar,
+            bool(self.state.export_df is not None and self.chk_seleccion.isChecked()),
+            (
+                "Calcula qué atributos son más útiles, sin tocar los datos."
+                if self.state.export_df is not None and self.chk_seleccion.isChecked()
+                else (
+                    "Activa la selección de atributos para poder analizarlos."
+                    if not self.chk_seleccion.isChecked()
+                    else "Aplica el preprocesamiento para tener el dataset transformado."
+                )
+            ),
+        )
 
     def _reload_targets(self):
         anterior = self.state.target_column
@@ -790,6 +847,11 @@ class TrainTab(QWidget):
             # `_lock_controls(False)` no debe dejar la selección activa ni el
             # análisis disponible: se restauran con la configuración actual.
             self._on_seleccion_toggled(self.chk_seleccion.isChecked())
+        else:
+            # Al desbloquear, el estado depende de `AppState`, no de que
+            # acaba de terminar un entrenamiento: si el objetivo no está
+            # elegido, «Entrenar» debe seguir apagado.
+            self._update_enabled_state()
 
     def _store_result(self, pipe, metrics, test_data, cv_results):
         contexto = self._run_context or {}

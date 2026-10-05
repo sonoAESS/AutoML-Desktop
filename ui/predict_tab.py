@@ -16,7 +16,9 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, persistence
 from ui import file_dialogs
+from ui.enabled import con_pista
 from ui.layout import acotar_tabla
+from ui.theme import marcar
 
 EXPORT_FILTER = "CSV (*.csv);;Excel (*.xlsx)"
 EXPORT_PREFERENCE = (";", ",", "\t", "|")
@@ -96,10 +98,24 @@ class PredictTab(QWidget):
         self.btn_predict.clicked.connect(self.predict)
         layout.addWidget(self.btn_predict)
 
-        self.btn_export = QPushButton("Exportar resultados (datos + predicción)…")
+        self.btn_export = QPushButton("Exportar resultados")
+        self.btn_export.setToolTip(
+            "Guarda un CSV con los datos de entrada y las columnas de "
+            "predicción, para poder revisar el resultado."
+        )
         self.btn_export.setEnabled(False)
         self.btn_export.clicked.connect(self.export_predictions)
         layout.addWidget(self.btn_export)
+
+        self.btn_add_to_data = QPushButton("Añadir al dataset")
+        marcar(self.btn_add_to_data, "peligro")
+        self.btn_add_to_data.setToolTip(
+            "Añade la predicción como una columna más del dataset cargado. "
+            "Después ya no podrás deshacerlo sin volver a cargar el archivo."
+        )
+        self.btn_add_to_data.setEnabled(False)
+        self.btn_add_to_data.clicked.connect(self.add_to_data)
+        layout.addWidget(self.btn_add_to_data)
 
         layout.addWidget(QLabel("Predicciones:"))
         self.table_salida = QTableWidget()
@@ -109,6 +125,9 @@ class PredictTab(QWidget):
         self.lbl_resultado = QLabel("")
         self.lbl_resultado.setWordWrap(True)
         layout.addWidget(self.lbl_resultado)
+
+        # Sin modelo cargado no se puede predecir.
+        self._update_enabled_state()
 
     # ------------------------------------------------------------------
     def load_bundle(self):
@@ -184,6 +203,47 @@ class PredictTab(QWidget):
         self._clear_predictions()
 
     # ------------------------------------------------------------------
+    def refresh(self):
+        """Reevalúa qué se puede hacer con el modelo y los datos cargados."""
+        self._update_enabled_state()
+
+    def _update_enabled_state(self):
+        """Aplicar el modelo exige modelo **y** datos de entrada.
+
+        Exportar exige predicciones ya calculadas. Antes los dos botones se
+        pulsaban sin nada y el error salía como diálogo.
+        """
+        hay_modelo = self.state.bundle is not None
+        hay_datos = self._input_df is not None
+        hay_predicciones = self._predictions is not None
+
+        con_pista(
+            self.btn_predict,
+            hay_modelo and hay_datos,
+            (
+                "Aplica el modelo cargado a los datos de entrada de arriba."
+                if hay_modelo and hay_datos
+                else (
+                    "Carga primero un modelo guardado."
+                    if not hay_modelo
+                    else "Carga un CSV con los datos a predecir."
+                )
+            ),
+        )
+        con_pista(
+            self.btn_export,
+            hay_predicciones,
+            (
+                "Guarda los datos de entrada junto con la predicción, para "
+                "revisar el resultado."
+                if hay_predicciones
+                else "Primero aplica el modelo para tener una predicción que exportar."
+            ),
+        )
+        self.btn_add_to_data.setEnabled(hay_predicciones)
+        self.table_salida.setEnabled(hay_predicciones)
+
+    # ------------------------------------------------------------------
     def predict(self):
         if self.state.bundle is None or self._input_df is None:
             QMessageBox.warning(
@@ -242,6 +302,38 @@ class PredictTab(QWidget):
         )
         return respuesta == QMessageBox.Yes
 
+    def add_to_data(self):
+        """Añade la predicción como columna del dataset cargado.
+
+        Es la acción que más puede costar deshacer, así que pide confirmación
+        antes de escribir.
+        """
+        if self._predictions is None:
+            return
+        respuesta = QMessageBox.question(
+            self,
+            "Añadir al dataset",
+            "Se añadirá la predicción como una columna del dataset cargado. "
+            "Es un cambio que no se puede deshacer.\n\n¿Continuar?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if respuesta != QMessageBox.Yes:
+            return
+
+        entrada = self._input_df.copy()
+        for columna in self._predictions.columns:
+            if columna in (self.state.target_column,):
+                continue
+            entrada[columna] = self._predictions[columna].values
+        self._input_df = entrada
+        self._fill_table(self.table_entrada, entrada, max_rows=100)
+        self.lbl_resultado.setText(
+            "Predicción añadida al dataset. Ya puedes exportarlo con "
+            "«Exportar resultados»."
+        )
+
+    # ------------------------------------------------------------------
     def export_predictions(self):
         """Guarda el CSV de entrada junto con las columnas de predicción."""
         if self._predictions is None:

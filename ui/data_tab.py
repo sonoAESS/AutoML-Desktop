@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, profiling
 from ui import file_dialogs
+from ui.enabled import con_pista
 from ui.layout import acotar_tabla
 
 TASK_LABELS = {
@@ -95,7 +96,9 @@ class DataTab(QWidget):
         acotar_tabla(self.table)
         layout.addWidget(self.table)
 
-    # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+        self._update_enabled_state()
+
     def load_data(self):
         """Abre un fichero CSV/Excel/ODS y lo deja como `raw_df`."""
         path = file_dialogs.choose_table_file(self, "Seleccionar fichero de datos")
@@ -135,6 +138,38 @@ class DataTab(QWidget):
         """Repinta el perfil sin volver a leer el archivo."""
         self._show_profile()
         self._show_summary()
+        self._update_enabled_state()
+
+    # ------------------------------------------------------------------
+    def _update_enabled_state(self):
+        """Solo hay algo que perfilar cuando hay un dataset cargado."""
+        hay_datos = self.state.raw_df is not None
+        sin_datos = "Carga un archivo para ver el perfil de sus columnas."
+        con_pista(
+            self.btn_usar_objetivo,
+            hay_datos and self.state.target_column is not None,
+            (
+                "Elige como variable objetivo la que el análisis sugiere."
+                if hay_datos and self.state.target_column is not None
+                else (
+                    sin_datos
+                    if not hay_datos
+                    else "Todavía no hay ninguna variable objetivo elegida."
+                )
+            ),
+        )
+        con_pista(
+            self.btn_reperfil,
+            hay_datos,
+            (
+                "Vuelve a detectar el tipo de cada columna desde cero, "
+                "descartando las correcciones manuales."
+                if hay_datos
+                else sin_datos
+            ),
+        )
+        self.table_perfil.setEnabled(hay_datos)
+        self.table.setEnabled(hay_datos)
 
     # ------------------------------------------------------------------
     def _show_summary(self):

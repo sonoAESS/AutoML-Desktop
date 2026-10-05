@@ -26,6 +26,41 @@ Todos los colores viven en `ui/theme.py`: `COLORES` para la paleta y `TONOS`
 para los tintes de hover, selección y deshabilitado. Si añades un color, va
 ahí, no en el fichero donde se use.
 
+### Cómo está organizada la ventana
+
+```
+┌──────────────────────────────────────────────────┐
+│  Paso 4 de 5 · Resultados                        │
+├──────────┬───────────────────────────────────────┤
+│ AutoML   │  Métricas │ Comparativa │ Exportar    │
+│ Desktop  │                                       │
+│ ✓ Datos  │   tabla + gráfico                     │
+│ ✓ Prepro │                                       │
+│ ▸ Entren │                                       │
+│ Resul…   │                                       │
+│ Predicc… │                                       │
+├──────────┴───────────────────────────────────────┤
+│ Listo                                            │
+└──────────────────────────────────────────────────┘
+```
+
+La columna izquierda es la **barra de pasos**: marca en cuál estás con el
+borde rojo y con el fondo azul, y con «✓» los que ya terminaste. Antes eran
+cinco pestañas iguales, sin ninguna pista de por dónde iba el usuario.
+
+Dos decisiones queresolvieron los problemas de espacio:
+
+- **Acordeón** en Preprocesamiento y Entrenamiento: los grupos son cinco o
+  seis decisiones independientes, y solo una interesa cada vez. El botón de
+  acción queda fuera, siempre visible.
+- **Sub-pestañas** en Resultados: la comparativa de Friedman es larga y
+  opcional; apilada obligaba a hacer scroll para verla.
+
+Toda la ventana cabe en 1240×720, y el contenido que no cabe se desplaza
+dentro de su pestaña en vez de recortarse.
+
+Atajos: `Ctrl+1`…`Ctrl+5` para ir a un paso, `Ctrl+Tab` para avanzar.
+
 Características
 
 - **Carga de CSV, XLSX, XLS y ODS** con autodetección de separador y

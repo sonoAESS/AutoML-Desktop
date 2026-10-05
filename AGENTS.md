@@ -55,6 +55,8 @@ automl_app/
 │   ├── file_dialogs.py
 │   ├── theme.py
 │   ├── plotting.py
+│   ├── layout.py
+│   ├── sidebar.py
 │   └── workers.py
 ├── resources/            escudo e icono (solo binarios)
 ├── specs/
@@ -194,6 +196,38 @@ En `ui/` solo se permite:
 ---
 
 ## 5. Patrones a respetar
+
+### 5.4 La navegación va por señales, nunca subiendo al padre
+
+**Regla dura**: ninguna pestaña accede a `self.window()`, a
+`centralWidget()` ni al índice de otra pestaña. Para pedir un cambio de
+paso se emite una señal y la ventana decide:
+
+```python
+class ResultsTab(QWidget):
+    navigate_requested = Signal(str)   # "prediccion", "entrenamiento"…
+
+# MainWindow
+self.results_tab.navigate_requested.connect(self.ir_a_paso_nombre)
+```
+
+El motivo es concreto: el código antiguo hacía
+`window.centralWidget().indexOf(window.predict_tab)`, y con el contenido en un
+`QStackedWidget` ese `hasattr(tabs, "setCurrentIndex")` seguía siendo cierto
+para el widget equivocado: el botón habría saltado en silencio a otra
+pestaña. Hay un test que falla si `self.window()` aparece fuera de
+`main_window.py`.
+
+### 5.5 Layout: scroll y alturas acotadas
+
+- Toda pestaña va envuelta con `ui.layout.envolver_scroll()`. El problema
+  medido era que **no había scroll** y las tablas sin `setMaximumHeight`
+  empujaban los botones fuera de la ventana.
+- Toda tabla y lista nueva pasa por `ui.layout.acotar_tabla()`.
+- Los lienzos de matplotlib usan `ui.layout.expandir_canvas()` y llaman a
+  `tight_layout()` antes de dibujar.
+- Los bloques largos van en un `QToolBox` (acordeón) y las acciones
+  principales **fuera** del acordeón, siempre visibles.
 
 ### 5.1 Comunicación entre pestañas
 

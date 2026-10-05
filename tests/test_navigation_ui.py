@@ -179,8 +179,20 @@ def test_ir_a_paso_con_indice_invalido_no_revienta(ventana):
 
 def test_el_boton_de_prediccion_navega_por_senal(ventana):
     """El recorrido completo: botón → señal → contenido."""
+    # Sin modelo el botón está apagado (SDD-009), así que hace falta uno.
+    ventana.state.pipeline = object()
+    ventana.results_tab.refresh()
+    assert ventana.results_tab.btn_load_in_predict.isEnabled()
+
     ventana.results_tab.btn_load_in_predict.click()
     assert ventana.pilas.currentIndex() == 4
+
+
+def test_la_senal_de_navegacion_llega_a_cualquier_paso(ventana):
+    ventana.results_tab.navigate_requested.emit("entrenamiento")
+    assert ventana.pilas.currentIndex() == 2
+    ventana.results_tab.navigate_requested.emit("resultados")
+    assert ventana.pilas.currentIndex() == 3
 
 
 def test_el_atajo_de_teclado_lleva_al_paso(ventana, app):

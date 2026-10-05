@@ -39,6 +39,28 @@ def test_la_hoja_no_deja_tokens_sin_sustituir():
     assert "@@TOKEN@@" not in qss
 
 
+def test_todas_las_llamadas_al_interpolador_estan_evaluadas():
+    """Regresión: 29 valores quedaron como texto `_c('blanco')` sin llaves.
+
+    El síntoma era el escudo y el título de la barra lateral en negro sobre
+    azul marino: la hoja era válida, solo que Qt no entendía el valor.
+    """
+    qss = theme.build_stylesheet()
+    sueltos = [
+        m.start() for m in re.finditer(r"_c\('", qss) if qss[m.start() - 1] != "{"
+    ]
+    assert not sueltos, [qss[s - 30 : s + 20] for s in sueltos[:3]]
+    assert "_c('" not in qss.replace("{_c('", "")
+
+
+def test_el_titulo_de_la_marca_es_blanco_sobre_azul():
+    """Contraste del texto de la barra lateral."""
+    qss = theme.build_stylesheet()
+    bloque = qss.split("QLabel#marca_titulo")[1].split("}")[0]
+    assert theme.COLORES["blanco"] in bloque
+    assert "color: #000000" not in qss
+
+
 def test_ningun_color_de_la_hoja_esta_fuera_de_los_tokens():
     """C-002: la paleta se declara una sola vez, en COLORES y TONOS."""
     qss = theme.build_stylesheet()

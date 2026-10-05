@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, profiling
 from ui import file_dialogs
+from ui.layout import acotar_tabla
 
 TASK_LABELS = {
     profiling.CLASSIFICATION: "clasificación",
@@ -70,6 +71,7 @@ class DataTab(QWidget):
         self.table_perfil.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.Stretch
         )
+        acotar_tabla(self.table_perfil)
         self.table_perfil.verticalHeader().setVisible(False)
         v.addWidget(self.table_perfil)
 
@@ -90,6 +92,7 @@ class DataTab(QWidget):
 
         layout.addWidget(QLabel("Vista previa de los datos:"))
         self.table = QTableWidget()
+        acotar_tabla(self.table)
         layout.addWidget(self.table)
 
     # ------------------------------------------------------------------

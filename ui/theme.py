@@ -178,33 +178,33 @@ def build_stylesheet() -> str:
     return f"""
 /* ---------- base ---------- */
 QWidget {{
-    background-color: {c('fondo')};
-    color: {c('texto')};
+    background-color: {_c('fondo')};
+    color: {_c('texto')};
     font-size: {TAMANO_BASE}pt;
 }}
 QToolTip {{
-    background-color: {c('marino')};
-    color: _c('blanco');
-    border: 1px solid {c('azul_osc')};
+    background-color: {_c('marino')};
+    color: {_c('blanco')};
+    border: 1px solid {_c('azul_osc')};
     border-radius: {r['sm']}px;
     padding: {e['xs']}px {e['sm']}px;
 }}
 
 /* ---------- botones ---------- */
 QPushButton {{
-    background-color: {c('papel')};
-    color: {c('azul_med')};
-    border: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    color: {_c('azul_med')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['md']}px;
     padding: {e['xs']}px {e['lg']}px;
     min-height: 22px;
 }}
-QPushButton:hover  {{ background-color: _c('hover'); border-color: {c('azul_clar')}; }}
-QPushButton:pressed{{ background-color: _c('seleccion'); }}
+QPushButton:hover  {{ background-color: {_c('hover')}; border-color: {_c('azul_clar')}; }}
+QPushButton:pressed{{ background-color: {_c('seleccion')}; }}
 QPushButton:disabled {{
-    color: {c('suave')};
-    background-color: _c('inactivo');
-    border-color: {c('borde')};
+    color: {_c('suave')};
+    background-color: {_c('inactivo')};
+    border-color: {_c('borde')};
 }}
 QPushButton[clase="secundario"] {{
     background-color: {_c('papel')};
@@ -216,29 +216,29 @@ QPushButton[clase="secundario"]:hover {{
     border-color: {_c('azul_clar')};
 }}
 QPushButton[clase="primario"] {{
-    background-color: {c('azul_med')};
-    color: _c('blanco');
-    border: 1px solid {c('azul_med')};
+    background-color: {_c('azul_med')};
+    color: {_c('blanco')};
+    border: 1px solid {_c('azul_med')};
     font-weight: 600;
 }}
-QPushButton[clase="primario"]:hover   {{ background-color: {c('azul_osc')}; }}
-QPushButton[clase="primario"]:pressed {{ background-color: {c('marino')}; }}
+QPushButton[clase="primario"]:hover   {{ background-color: {_c('azul_osc')}; }}
+QPushButton[clase="primario"]:pressed {{ background-color: {_c('marino')}; }}
 QPushButton[clase="primario"]:disabled {{
-    background-color: _c('inactivo_primario');
-    border-color: _c('inactivo_primario');
-    color: _c('inactivo_texto');
+    background-color: {_c('inactivo_primario')};
+    border-color: {_c('inactivo_primario')};
+    color: {_c('inactivo_texto')};
 }}
 QPushButton[clase="peligro"] {{
-    background-color: {c('papel')};
-    color: {c('acento')};
-    border: 1px solid {c('acento')};
+    background-color: {_c('papel')};
+    color: {_c('acento')};
+    border: 1px solid {_c('acento')};
 }}
-QPushButton[clase="peligro"]:hover {{ background-color: {c('acento')}; color: _c('blanco'); }}
+QPushButton[clase="peligro"]:hover {{ background-color: {_c('acento')}; color: {_c('blanco')}; }}
 
 /* ---------- grupos ---------- */
 QGroupBox {{
-    background-color: {c('papel')};
-    border: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['md']}px;
     margin-top: {e['md']}px;
     padding: {e['md']}px {e['md']}px {e['sm']}px {e['sm']}px;
@@ -249,98 +249,98 @@ QGroupBox::title {{
     subcontrol-position: top left;
     left: {e['md']}px;
     padding: 0 {e['sm']}px;
-    color: {c('azul_med')};
+    color: {_c('azul_med')};
 }}
 
 /* ---------- entradas ---------- */
 QLineEdit, QTextEdit, QPlainTextEdit, QSpinBox, QDoubleSpinBox, QComboBox {{
-    background-color: {c('papel')};
-    color: {c('texto')};
-    border: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    color: {_c('texto')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['sm']}px;
     padding: 3px {e['sm']}px;
-    selection-background-color: {c('azul_med')};
-    selection-color: _c('blanco');
+    selection-background-color: {_c('azul_med')};
+    selection-color: {_c('blanco')};
 }}
 QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus,
 QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {{
-    border: 1px solid {c('azul_clar')};
+    border: 1px solid {_c('azul_clar')};
 }}
 QLineEdit:disabled, QTextEdit:disabled, QPlainTextEdit:disabled,
 QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {{
-    background-color: _c('inactivo');
-    color: {c('suave')};
+    background-color: {_c('inactivo')};
+    color: {_c('suave')};
 }}
 QComboBox::drop-down {{ border: none; width: 18px; }}
 QComboBox QAbstractItemView {{
-    background-color: {c('papel')};
-    color: {c('texto')};
-    border: 1px solid {c('borde')};
-    selection-background-color: {c('azul_med')};
-    selection-color: _c('blanco');
+    background-color: {_c('papel')};
+    color: {_c('texto')};
+    border: 1px solid {_c('borde')};
+    selection-background-color: {_c('azul_med')};
+    selection-color: {_c('blanco')};
     outline: none;
 }}
 QSpinBox::up-button, QDoubleSpinBox::up-button,
 QSpinBox::down-button, QDoubleSpinBox::down-button {{ width: 14px; }}
 
 /* ---------- casillas ---------- */
-QCheckBox, QRadioButton {{ spacing: {e['sm']}px; }}
+QCheckBox, QRadioButton {{ spacing: {e['sm']}px; background: transparent; }}
 QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px; }}
 QCheckBox::indicator {{
-    border: 1px solid {c('suave')};
+    border: 1px solid {_c('suave')};
     border-radius: {r['sm']}px;
-    background-color: {c('papel')};
+    background-color: {_c('papel')};
 }}
 QCheckBox::indicator:checked {{
-    background-color: {c('azul_med')};
-    border-color: {c('azul_med')};
+    background-color: {_c('azul_med')};
+    border-color: {_c('azul_med')};
 }}
-QCheckBox::indicator:disabled {{ border-color: {c('borde')}; background-color: _c('inactivo'); }}
+QCheckBox::indicator:disabled {{ border-color: {_c('borde')}; background-color: {_c('inactivo')}; }}
 QRadioButton::indicator {{
-    border: 1px solid {c('suave')};
+    border: 1px solid {_c('suave')};
     border-radius: 8px;
-    background-color: {c('papel')};
+    background-color: {_c('papel')};
 }}
 QRadioButton::indicator:checked {{
-    border: 5px solid {c('azul_med')};
+    border: 5px solid {_c('azul_med')};
 }}
-QCheckBox:disabled, QRadioButton:disabled {{ color: {c('suave')}; }}
+QCheckBox:disabled, QRadioButton:disabled {{ color: {_c('suave')}; }}
 
 /* ---------- tablas y listas ---------- */
 QTableWidget, QTableView, QListWidget, QTreeWidget {{
-    background-color: {c('papel')};
-    alternate-background-color: _c('tabla_alterna');
-    border: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    alternate-background-color: {_c('tabla_alterna')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['sm']}px;
-    gridline-color: _c('rejilla');
-    selection-background-color: _c('seleccion');
-    selection-color: {c('texto')};
+    gridline-color: {_c('rejilla')};
+    selection-background-color: {_c('seleccion')};
+    selection-color: {_c('texto')};
 }}
 QTableWidget::item:selected, QListWidget::item:selected {{
-    background-color: _c('seleccion');
-    color: {c('texto')};
+    background-color: {_c('seleccion')};
+    color: {_c('texto')};
 }}
 QHeaderView::section {{
-    background-color: {c('marino')};
-    color: _c('blanco');
+    background-color: {_c('marino')};
+    color: {_c('blanco')};
     border: none;
-    border-right: 1px solid {c('azul_osc')};
+    border-right: 1px solid {_c('azul_osc')};
     padding: {e['xs']}px {e['sm']}px;
     font-weight: 600;
 }}
-QTableCornerButton::section {{ background-color: {c('marino')}; border: none; }}
+QTableCornerButton::section {{ background-color: {_c('marino')}; border: none; }}
 
 /* ---------- pestañas ---------- */
 QTabWidget::pane {{
-    border: 1px solid {c('borde')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['md']}px;
-    background-color: {c('papel')};
+    background-color: {_c('papel')};
     top: -1px;
 }}
 QTabBar::tab {{
-    background-color: _c('inactivo_borde');
-    color: {c('suave')};
-    border: 1px solid {c('borde')};
+    background-color: {_c('inactivo_borde')};
+    color: {_c('suave')};
+    border: 1px solid {_c('borde')};
     border-bottom: none;
     border-top-left-radius: {r['sm']}px;
     border-top-right-radius: {r['sm']}px;
@@ -348,30 +348,30 @@ QTabBar::tab {{
     margin-right: 2px;
 }}
 QTabBar::tab:selected {{
-    background-color: {c('papel')};
-    color: {c('azul_med')};
+    background-color: {_c('papel')};
+    color: {_c('azul_med')};
     font-weight: 600;
 }}
-QTabBar::tab:hover:!selected {{ background-color: _c('tab_hover'); }}
+QTabBar::tab:hover:!selected {{ background-color: {_c('tab_hover')}; }}
 
 /* ---------- acordeón ---------- */
 QToolBox::pane {{
-    border: 1px solid {c('borde')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['md']}px;
-    background-color: {c('papel')};
+    background-color: {_c('papel')};
     top: -1px;
 }}
 QToolBox QToolButton {{
-    background-color: {c('papel')};
-    color: {c('texto')};
-    border: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    color: {_c('texto')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['sm']}px;
     padding: {e['sm']}px;
     font-weight: 600;
     text-align: left;
 }}
-QToolBox QToolButton:hover {{ background-color: _c('hover'); }}
-QToolBox QToolButton:checked {{ background-color: _c('seleccion'); color: {c('azul_med')}; }}
+QToolBox QToolButton:hover {{ background-color: {_c('hover')}; }}
+QToolBox QToolButton:checked {{ background-color: {_c('seleccion')}; color: {_c('azul_med')}; }}
 
 /* ---------- barras ---------- */
 QScrollBar:vertical {{
@@ -380,87 +380,98 @@ QScrollBar:vertical {{
     margin: 0;
 }}
 QScrollBar::handle:vertical {{
-    background: {c('borde')};
+    background: {_c('borde')};
     border-radius: 6px;
     min-height: 30px;
 }}
-QScrollBar::handle:vertical:hover {{ background: {c('suave')}; }}
+QScrollBar::handle:vertical:hover {{ background: {_c('suave')}; }}
 QScrollBar:horizontal {{ background: transparent; height: 12px; }}
 QScrollBar::handle:horizontal {{
-    background: {c('borde')};
+    background: {_c('borde')};
     border-radius: 6px;
     min-width: 30px;
 }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
 QProgressBar {{
-    background-color: _c('inactivo_borde');
-    border: 1px solid {c('borde')};
+    background-color: {_c('inactivo_borde')};
+    border: 1px solid {_c('borde')};
     border-radius: {r['sm']}px;
     text-align: center;
-    color: {c('texto')};
+    color: {_c('texto')};
     min-height: 16px;
 }}
 QProgressBar::chunk {{
-    background-color: {c('azul_clar')};
+    background-color: {_c('azul_clar')};
     border-radius: {r['sm'] - 1}px;
 }}
 
 /* ---------- etiquetas ---------- */
-QLabel[role="titulo"]   {{ font-size: {TAMANO_BASE + 3}pt; font-weight: 600; color: {c('marino')}; }}
-QLabel[role="seccion"]  {{ font-weight: 600; color: {c('marino')}; }}
-QLabel[role="aviso"]    {{ color: {c('ambar')}; }}
-QLabel[role="error"]    {{ color: {c('acento')}; }}
-QLabel[role="exito"]    {{ color: {c('verde')}; }}
-QLabel[role="suave"]    {{ color: {c('suave')}; }}
+/* Sin esto cada etiqueta pinta su propio rectángulo y sobre un grupo blanco
+   aparecen franjas grises donde solo hay texto. */
+QLabel {{ background: transparent; }}
+QLabel[role="titulo"]   {{ font-size: {TAMANO_BASE + 3}pt; font-weight: 600; color: {_c('marino')}; }}
+QLabel[role="titulo"]   {{ font-size: {TAMANO_BASE + 3}pt; font-weight: 600; color: {_c('marino')}; }}
+QLabel[role="seccion"]  {{ font-weight: 600; color: {_c('marino')}; }}
+QLabel[role="aviso"]    {{ color: {_c('ambar')}; }}
+QLabel[role="error"]    {{ color: {_c('acento')}; }}
+QLabel[role="exito"]    {{ color: {_c('verde')}; }}
+QLabel[role="suave"]    {{ color: {_c('suave')}; }}
 
 /* ---------- barra lateral de pasos ---------- */
-QFrame#lateral {{ background-color: {c('marino')}; border: none; }}
+QFrame#lateral {{ background-color: {_c('marino')}; border: none; }}
 QLabel#marca_titulo {{
-    color: _c('blanco');
+    color: {_c('blanco')};
     font-size: {TAMANO_BASE + 2}pt;
     font-weight: 600;
     background-color: transparent;
 }}
 QLabel#marca_organizacion {{
-    color: _c('sidebar_texto');
+    color: {_c('sidebar_texto')};
     font-size: {TAMANO_BASE - 1}pt;
     background-color: transparent;
 }}
-QLabel#paso_estado {{ color: _c('sidebar_texto'); background-color: transparent; }}
+QLabel#paso_estado {{ color: {_c('sidebar_texto')}; background-color: transparent; }}
 QPushButton#paso {{
     background-color: transparent;
     border: none;
     border-left: 3px solid transparent;
     border-radius: 0;
-    color: _c('sidebar_texto');
+    color: {_c('sidebar_texto')};
     padding: {e['sm']}px {e['md']}px;
     text-align: left;
     font-weight: 600;
 }}
-QPushButton#paso:hover {{ background-color: _c('sidebar_hover'); color: _c('blanco'); }}
+QPushButton#paso:hover {{ background-color: {_c('sidebar_hover')}; color: {_c('blanco')}; }}
 QPushButton#paso:checked {{
-    background-color: {c('azul_med')};
-    border-left: 3px solid {c('acento')};
-    color: _c('blanco');
+    background-color: {_c('azul_med')};
+    border-left: 3px solid {_c('acento')};
+    color: {_c('blanco')};
+}}
+/* Un paso completado se distingue por el texto («✓») y por el borde, no solo
+   por el color: en escala de grises el usuario tiene que saber dónde está. */
+QPushButton#paso[estado="completado"] {{ color: {_c('blanco')}; }}
+QPushButton#paso[estado="completado"]:checked {{
+    background-color: {_c('azul_osc')};
+    border-left: 3px solid {_c('oro')};
 }}
 
 /* ---------- cabecera ---------- */
 QFrame#cabecera {{
-    background-color: {c('papel')};
-    border-bottom: 1px solid {c('borde')};
+    background-color: {_c('papel')};
+    border-bottom: 1px solid {_c('borde')};
 }}
-QLabel#cabecera_titulo {{ font-size: {TAMANO_BASE + 3}pt; font-weight: 600; color: {c('marino')}; }}
+QLabel#cabecera_titulo {{ font-size: {TAMANO_BASE + 3}pt; font-weight: 600; color: {_c('marino')}; }}
 
 /* ---------- estado y diálogos ---------- */
 QStatusBar {{
-    background-color: {c('papel')};
-    border-top: 1px solid {c('borde')};
-    color: {c('suave')};
+    background-color: {_c('papel')};
+    border-top: 1px solid {_c('borde')};
+    color: {_c('suave')};
 }}
 QStatusBar::item {{ border: none; }}
-QMessageBox, QDialog {{ background-color: {c('fondo')}; }}
-QMessageBox QLabel {{ color: {c('texto')}; }}
+QMessageBox, QDialog {{ background-color: {_c('fondo')}; }}
+QMessageBox QLabel {{ color: {_c('texto')}; }}
 QMessageBox QPushButton {{ min-width: 78px; }}
 
 QScrollArea {{ border: none; background: transparent; }}

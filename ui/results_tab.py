@@ -17,12 +17,14 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 from sklearn.metrics import ConfusionMatrixDisplay
 
 from core import model_specs, model_trainer, persistence
+from ui.layout import acotar_tabla, expandir_canvas
 from ui.theme import marcar
 from ui.workers import ComparisonWorker, WorkerThread
 
@@ -60,6 +62,9 @@ def _format_metric(valor) -> str:
 
 class ResultsTab(QWidget):
     model_saved = Signal(str)
+    #: Pide cambiar de paso. La ventana decide a dónde ir: una pestaña no
+    #: puede tocar el `QTabWidget` del padre (AGENTS §5.1).
+    navigate_requested = Signal(str)
 
     def __init__(self, state):
         super().__init__()
@@ -68,10 +73,24 @@ class ResultsTab(QWidget):
         self._build_ui()
 
     def _build_ui(self):
+        """Tres sub-pestañas, porque apiladas no cabían en una pantalla.
+
+        Métricas y gráficos medían ~330 px de lienzo más la tabla; la
+        comparativa sumaba otros ~340. Apiladas daban más de 1100 px, así que
+        solo se veía el primer gráfico.
+        """
         layout = QVBoxLayout(self)
+        self.subpestanas = QTabWidget()
+        layout.addWidget(self.subpestanas)
+
+        # --- Métricas ---
+        pagina_metricas = QWidget()
+        v_metricas = QVBoxLayout(pagina_metricas)
+        v_metricas.setContentsMargins(0, 0, 0, 0)
+
         self.lbl = QLabel("Sin resultados todavía.")
         self.lbl.setWordWrap(True)
-        layout.addWidget(self.lbl)
+        v_metricas.addWidget(self.lbl)
 
         self.tbl_metricas = QTableWidget(0, 2)
         self.tbl_metricas.setHorizontalHeaderLabels(["Métrica", "Valor"])
@@ -79,18 +98,36 @@ class ResultsTab(QWidget):
             1, QHeaderView.Stretch
         )
         self.tbl_metricas.verticalHeader().setVisible(False)
-        self.tbl_metricas.setMaximumHeight(140)
-        layout.addWidget(self.tbl_metricas)
+        acotar_tabla(self.tbl_metricas, 140)
+        v_metricas.addWidget(self.tbl_metricas)
 
         self.figure = Figure(figsize=(5, 4))
         self.canvas = FigureCanvasQTAgg(self.figure)
-        layout.addWidget(self.canvas)
+        expandir_canvas(self.canvas)
+        v_metricas.addWidget(self.canvas, 1)
 
-        layout.addWidget(self._build_comparison_group())
-        # Empieza oculta: sin tipo de tarea o sin dataset transformado no hay
-        # nada que comparar, y hasta el primer `refresh()` no se sabe. Se oculta
-        # después de añadirla al layout porque reparentar borra el estado.
-        self.gb_comparativa.setVisible(False)
+        self.subpestanas.addTab(pagina_metricas, "Métricas")
+
+        # --- Comparativa ---
+        pagina_comparativa = QWidget()
+        v_comparativa = QVBoxLayout(pagina_comparativa)
+        v_comparativa.setContentsMargins(0, 0, 0, 0)
+        self._pagina_comparativa = pagina_comparativa
+
+        # Se construye el grupo ya escondido y se oculta la página entera
+        # después de añadirla: reparentar borra el estado de visibilidad.
+        v_comparativa.addWidget(self._build_comparison_group())
+        v_comparativa.addStretch()
+        self.subpestanas.addTab(pagina_comparativa, "Comparativa")
+        self.pagina_comparativa = self.subpestanas.indexOf(pagina_comparativa)
+        # Sin datos no hay nada que comparar: la página se oculta desde el
+        # principio, no solo cuando `refresh()` decidelo.
+        pagina_comparativa.setVisible(False)
+
+        # --- Exportar ---
+        pagina_exportar = QWidget()
+        v_exportar = QVBoxLayout(pagina_exportar)
+        v_exportar.setContentsMargins(0, 0, 0, 0)
 
         opciones = QHBoxLayout()
         self.chk_dataset = QCheckBox("Incluir el dataset transformado")
@@ -101,20 +138,28 @@ class ResultsTab(QWidget):
         )
         opciones.addWidget(self.chk_dataset)
         opciones.addStretch()
-        layout.addLayout(opciones)
+        v_exportar.addLayout(opciones)
 
-        botones = QHBoxLayout()
         self.btn_save = QPushButton("Guardar modelo y dataset (.automl)")
         marcar(self.btn_save, "primario")
         self.btn_save.clicked.connect(self.save_bundle)
         self.btn_export = QPushButton("Exportar solo el dataset (CSV)")
         self.btn_export.clicked.connect(self.export_dataset)
         self.btn_load_in_predict = QPushButton("Ir a Predicción")
-        self.btn_load_in_predict.clicked.connect(self._go_to_predict)
-        botones.addWidget(self.btn_save)
-        botones.addWidget(self.btn_export)
-        botones.addWidget(self.btn_load_in_predict)
-        layout.addLayout(botones)
+        self.btn_load_in_predict.clicked.connect(
+            lambda: self.navigate_requested.emit("prediccion")
+        )
+        v_exportar.addWidget(self.btn_save)
+        v_exportar.addWidget(self.btn_export)
+        v_exportar.addWidget(self.btn_load_in_predict)
+        v_exportar.addStretch()
+        self.subpestanas.addTab(pagina_exportar, "Exportar")
+
+        self.gb_comparativa.setVisible(False)
+
+        # La señal se conecta al final: `addTab` emite `currentChanged` y el
+        # manejador necesita `pagina_comparativa`, que aún no existe.
+        self.subpestanas.currentChanged.connect(self._al_cambiar_subpestana)
 
         self.lbl_saved = QLabel("")
         self.lbl_saved.setWordWrap(True)
@@ -165,7 +210,7 @@ class ResultsTab(QWidget):
             0, QHeaderView.Stretch
         )
         self.tbl_comparativa.verticalHeader().setVisible(False)
-        self.tbl_comparativa.setMaximumHeight(160)
+        acotar_tabla(self.tbl_comparativa, 160)
         v.addWidget(self.tbl_comparativa)
 
         self.lbl_excluidos = QLabel("")
@@ -180,7 +225,7 @@ class ResultsTab(QWidget):
         # ocupada y compartir eje lo haría ilegible.
         self.figure_cd = Figure(figsize=(5, 3))
         self.canvas_cd = FigureCanvasQTAgg(self.figure_cd)
-        self.canvas_cd.setMinimumHeight(180)
+        expandir_canvas(self.canvas_cd)
         v.addWidget(self.canvas_cd)
 
         self.gb_comparativa = gb
@@ -190,11 +235,19 @@ class ResultsTab(QWidget):
     # Comparativa de modelos (Friedman)
     # ------------------------------------------------------------------
     def _refresh_comparativa_disponibilidad(self):
-        """El grupo solo aparece con tipo de tarea y dataset transformado."""
+        """La comparativa solo aparece con tipo de tarea y dataset transformado.
+
+        Se oculta la **página** entera y no solo el grupo: dentro de una
+        sub-pestaña vacía el usuario ve un hueco sin explicación.
+        """
         disponible = bool(self.state.task_type) and self.state.export_df is not None
         self.gb_comparativa.setVisible(disponible)
+        self._pagina_comparativa.setVisible(disponible)
         if not disponible:
             self.btn_comparar.setEnabled(False)
+            # Si se estaba viendo esa página, hay que salir de ella.
+            if self.subpestanas.currentWidget() is self._pagina_comparativa:
+                self.subpestanas.setCurrentIndex(0)
             return
 
         metricas = model_specs.available_metrics(self.state.task_type)
@@ -301,11 +354,18 @@ class ResultsTab(QWidget):
         else:
             self.progress_comparativa.setRange(0, 0)
 
+    def _al_cambiar_subpestana(self, indice: int):
+        """Refresca la disponibilidad al cambiar de sub-pestaña."""
+        if indice == self.pagina_comparativa:
+            self._refresh_comparativa_disponibilidad()
+
     def _on_comparacion_lista(self, resultado):
         self.state.comparison = resultado
         self.state.comparison_key = self._comparison_key()
         self._set_busy_comparativa(False)
         self._show_comparison(resultado)
+        # La comparativa tardó: el usuario debe acabar viendo para qué la pidió.
+        self.subpestanas.setCurrentIndex(self.pagina_comparativa)
 
     def _on_comparacion_fallida(self, mensaje):
         self._set_busy_comparativa(False)
@@ -548,14 +608,6 @@ class ResultsTab(QWidget):
             QMessageBox.critical(self, "Error al exportar", str(e))
             return
         self.lbl_saved.setText(f"Dataset exportado en {destino}")
-
-    def _go_to_predict(self):
-        window = self.window()
-        tabs = window.centralWidget()
-        if tabs is not None and hasattr(tabs, "setCurrentIndex"):
-            indice = tabs.indexOf(window.predict_tab)
-            if indice >= 0:
-                tabs.setCurrentIndex(indice)
 
     def _default_name(self):
         base = (

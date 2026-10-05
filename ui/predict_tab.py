@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from core import data_loader, persistence
 from ui import file_dialogs
+from ui.layout import acotar_tabla
 
 EXPORT_FILTER = "CSV (*.csv);;Excel (*.xlsx)"
 EXPORT_PREFERENCE = (";", ",", "\t", "|")
@@ -85,6 +86,7 @@ class PredictTab(QWidget):
         self.lbl_datos.setWordWrap(True)
         v.addWidget(self.lbl_datos)
         self.table_entrada = QTableWidget()
+        acotar_tabla(self.table_entrada)
         self.table_entrada.setMaximumHeight(180)
         v.addWidget(self.table_entrada)
         layout.addWidget(gb_datos)
@@ -101,6 +103,7 @@ class PredictTab(QWidget):
 
         layout.addWidget(QLabel("Predicciones:"))
         self.table_salida = QTableWidget()
+        acotar_tabla(self.table_salida)
         layout.addWidget(self.table_salida)
 
         self.lbl_resultado = QLabel("")

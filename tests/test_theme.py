@@ -18,6 +18,21 @@ from ui import theme  # noqa: E402
 RAIZ = Path(__file__).resolve().parent.parent
 
 
+def _luminancia(hex_color: str) -> float:
+    """Luminancia relativa WCAG de un color `#rrggbb`."""
+    hex_color = hex_color.lstrip("#")
+    rgb = [int(hex_color[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    lineal = [c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    return 0.2126 * lineal[0] + 0.7152 * lineal[1] + 0.0722 * lineal[2]
+
+
+def _contraste(hex_a: str, hex_b: str) -> float:
+    """Razón de contraste WCAG entre dos colores."""
+    la, lb = _luminancia(hex_a), _luminancia(hex_b)
+    claro, oscuro = max(la, lb), min(la, lb)
+    return (claro + 0.05) / (oscuro + 0.05)
+
+
 @pytest.fixture(scope="module")
 def app():
     return QApplication.instance() or QApplication([])
@@ -53,12 +68,76 @@ def test_todas_las_llamadas_al_interpolador_estan_evaluadas():
     assert "_c('" not in qss.replace("{_c('", "")
 
 
-def test_el_titulo_de_la_marca_es_blanco_sobre_azul():
-    """Contraste del texto de la barra lateral."""
+def test_el_titulo_de_la_marca_contrasta_con_el_fondo():
+    """Contraste del texto de la barra lateral.
+
+    El título ya no es blanco: con la barra blanca, texto blanco sobre blanco
+    sería invisible, que es justo lo que pasó con el paso completado.
+    """
     qss = theme.build_stylesheet()
     bloque = qss.split("QLabel#marca_titulo")[1].split("}")[0]
-    assert theme.COLORES["blanco"] in bloque
+    fondo = theme.COLORES["lateral"]
+    color = theme.TONOS["sidebar_titulo"]
+    assert f"color: {color}" in bloque
+    assert _contraste(color, fondo) >= 4.5
     assert "color: #000000" not in qss
+
+
+def test_el_fondo_de_la_barra_es_el_token_lateral():
+    """El fondo de la barra usa su propio token, no `marino`."""
+    assert theme.COLORES["lateral"] == "#ffffff"
+    assert theme.COLORES["marino"] == "#12223b"
+    qss = theme.build_stylesheet()
+    bloque = qss.split("QFrame#lateral")[1].split("}")[0]
+    assert re.search(
+        rf"background-color:\s*{re.escape(theme.COLORES['lateral'])}", bloque
+    )
+
+
+def test_la_barra_blanca_tiene_borde_para_no_pegarse_al_contenido():
+    """Sin borde, una barra blanca sobre `fondo` gris se lee como un hueco."""
+    qss = theme.build_stylesheet()
+    bloque = qss.split("QFrame#lateral")[1].split("}")[0]
+    assert f"border-right: 1px solid {theme.COLORES['borde']}" in bloque
+
+
+def test_ningun_texto_de_la_barra_blanca_queda_blanco():
+    """Regresión del error que hizo este cambio necesario.
+
+    Al poner la barra en blanco, `QPushButton#paso[estado="completado"]` se
+    quedó con `color: blanco` sobre fondo blanco: el texto desaparecía. Se
+    comprueba que sobre fondo blanco ningún texto de la barra es blanco.
+    """
+    fondo = theme.COLORES["lateral"]
+    assert fondo == "#ffffff"
+    qss = theme.build_stylesheet()
+    blanco = theme.COLORES["blanco"]
+    bloque = qss.split("/* ---------- barra lateral")[1].split("/* ----------")[0]
+    # `background-color:` contiene `color:`, así que el patrón exige que la
+    # propiedad no esté precedida por `background-`.
+    patron = re.compile(rf"(?<!background-)color:\s*{re.escape(blanco)}")
+    # Se recorren las reglas enteras (`selector { cuerpo }`) y no las líneas: en
+    # una regla multilínea el selector está en la línea anterior al color.
+    for regla in re.finditer(r"([^{}]+)\{([^{}]*)\}", bloque):
+        selector, cuerpo = regla.group(1), regla.group(2)
+        if patron.search(cuerpo):
+            # Solo se admite blanco donde el fondo del propio selector es oscuro.
+            assert ":checked" in selector, selector.strip()
+
+
+def test_el_texto_de_la_barra_supera_wcag_aa():
+    """Contraste calculado, no hardcodeado: si cambia el token, el test sigue
+    verificando la regla."""
+    fondo = theme.COLORES["lateral"]
+    for token in ("sidebar_texto", "sidebar_titulo"):
+        assert _contraste(theme.TONOS[token], fondo) >= 4.5, token
+    assert _contraste(theme.COLORES["suave"], fondo) >= 4.5
+
+
+def test_el_escudo_se_muestra_a_64_px(app):
+    pixmap = theme.escudo_pixmap()
+    assert pixmap.height() == 64
+    assert pixmap.width() > 0
 
 
 def test_ningun_color_de_la_hoja_esta_fuera_de_los_tokens():
@@ -130,8 +209,28 @@ def test_el_icono_es_un_svg_valido():
     assert contenido.lstrip().startswith("<svg")
     assert "</svg>" in contenido
     # Hereda la paleta institucional, que es lo que lo hace coherente.
-    for color in ("#12223b", "#446dab", "#d34223"):
+    for color in ("#14448c", "#d34223"):
         assert color in contenido
+
+
+def test_el_icono_ico_tiene_los_siete_tamanos():
+    """PyInstaller en Windows necesita un .ico, no un .svg."""
+    from PIL import Image
+
+    ruta = Path(theme.resource_path("icono-app.ico"))
+    assert ruta.exists()
+    with Image.open(ruta) as img:
+        assert img.format == "ICO"
+        tamanos = set(img.ico.sizes())
+    assert tamanos == {
+        (16, 16),
+        (24, 24),
+        (32, 32),
+        (48, 48),
+        (64, 64),
+        (128, 128),
+        (256, 256),
+    }
 
 
 def test_resource_path_funciona_en_modo_compilado(monkeypatch, tmp_path):

@@ -93,21 +93,19 @@ class StepSidebar(QFrame):
 
         # --- marca institucional ---
         marca = QLabel()
-        pixmap = escudo_pixmap(34)
+        pixmap = escudo_pixmap()
         if not pixmap.isNull():
             marca.setPixmap(pixmap)
-        marca.setFixedHeight(44)
-        marca.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        marca.setFixedHeight(72)
+        marca.setAlignment(
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
+        )
         layout.addWidget(marca)
 
         titulo = QLabel(NOMBRE_APP)
         titulo.setObjectName("marca_titulo")
+        titulo.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(titulo)
-
-        organizacion = QLabel(ORGANIZACION)
-        organizacion.setObjectName("marca_organizacion")
-        organizacion.setWordWrap(True)
-        layout.addWidget(organizacion)
 
         layout.addSpacing(ESPACIOS["lg"])
 
@@ -121,9 +119,10 @@ class StepSidebar(QFrame):
 
         layout.addStretch()
 
-        self.pie = QLabel("Ministerio de Educación Superior")
+        self.pie = QLabel(ORGANIZACION)
         self.pie.setObjectName("marca_organizacion")
         self.pie.setWordWrap(True)
+        self.pie.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(self.pie)
 
         self.completados: set[int] = set()

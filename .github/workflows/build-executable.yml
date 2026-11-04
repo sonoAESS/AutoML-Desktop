@@ -83,11 +83,17 @@ jobs:
 
           raiz = pathlib.Path(".")
           toc = next(raiz.glob("build/*/PKG-00.toc"))
-          texto = toc.read_text(encoding="utf-8", errors="replace")
+          # En Windows el TOC escribe `resources\icono-app.svg`; normalizar a
+          # `/` permite la misma comprobación en ambos sistemas.
+          texto = toc.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
           recursos = sorted(p.name for p in (raiz / "resources").iterdir() if p.is_file())
           faltan = [n for n in recursos if f"resources/{n}" not in texto]
           if faltan:
-              sys.exit(f"RECURSOS SIN EMPAQUETAR: {faltan}")
+              muestra = [l for l in texto.splitlines() if "resources" in l][:5]
+              sys.exit(
+                  f"RECURSOS SIN EMPAQUETAR: {faltan}\n"
+                  f"Entradas de resources en el TOC:\n" + "\n".join(muestra)
+              )
           print(f"{len(recursos)} recursos empaquetados: {', '.join(recursos)}")
           PY
 

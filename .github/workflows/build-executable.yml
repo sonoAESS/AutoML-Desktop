@@ -79,13 +79,16 @@ jobs:
         run: |
           python - <<'PY'
           import pathlib
+          import re
           import sys
 
           raiz = pathlib.Path(".")
           toc = next(raiz.glob("build/*/PKG-00.toc"))
-          # En Windows el TOC escribe `resources\icono-app.svg`; normalizar a
-          # `/` permite la misma comprobación en ambos sistemas.
-          texto = toc.read_text(encoding="utf-8", errors="replace").replace("\\", "/")
+          # `PKG-00.toc` se escribe con `repr()`, así que en Windows una barra
+          # invertida aparece duplicada en el texto: `resources\\icono-app.svg`.
+          # Sustituir solo `\` por `/` dejaba `resources//icono-app.svg` y no
+          # coincidía nunca. Se colapsan las secuencias de barras a una sola.
+          texto = re.sub(r"[\\/]+", "/", toc.read_text(encoding="utf-8", errors="replace"))
           recursos = sorted(p.name for p in (raiz / "resources").iterdir() if p.is_file())
           faltan = [n for n in recursos if f"resources/{n}" not in texto]
           if faltan:

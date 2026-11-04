@@ -1,5 +1,9 @@
 name: Build executables (Linux + Windows)
 
+# PyInstaller no compila entre plataformas: un binario de Windows solo se puede
+# generar en Windows y uno de Linux en Linux. Por eso esto corre en una matriz
+# con un runner de cada sistema, y no en un único job.
+
 on:
   push:
     tags:
@@ -11,7 +15,7 @@ permissions:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -31,28 +35,79 @@ jobs:
           cache-dependency-path: 'pyproject.toml'
 
       - name: Install dependencies
+        # Se instalan desde `pyproject.toml`: si se listaran aquí a mano,
+        # cualquier dependencia nueva se olvidaría y el build saldría sin ella.
         run: |
           python -m pip install --upgrade pip
           pip install -e .
           pip install pyinstaller
 
+      - name: Comprobar que el código importa
+        # Falla aquí, en segundos, y no diez minutos después dentro del binario.
+        run: python -c "import main, ui.theme, core.model_specs"
+
       - name: Build with PyInstaller
-        run: pyinstaller --clean AutoML_MEC_Desktop.spec
+        run: pyinstaller --clean --noconfirm AutoML_MEC_Desktop.spec
+
+      - name: Comprobar que los recursos van dentro
+        # Ya pasó una vez: el .spec sin `datas` genera un ejecutable que arranca
+        # y muere con FileNotFoundError al pintar el escudo, y eso no se ve
+        # hasta que alguien lo abre. Se comprueba contra el paquete, no contra
+        # `dist/`: se exige que TODO fichero de `resources/` esté dentro, así
+        # que añadir un recurso sin empaquetarlo rompe aquí.
+        shell: bash
+        run: |
+          python - <<'PY'
+          import pathlib
+          import sys
+
+          raiz = pathlib.Path(".")
+          toc = next(raiz.glob("build/*/PKG-00.toc"))
+          texto = toc.read_text(encoding="utf-8", errors="replace")
+          recursos = sorted(p.name for p in (raiz / "resources").iterdir() if p.is_file())
+          faltan = [n for n in recursos if f"resources/{n}" not in texto]
+          if faltan:
+              sys.exit(f"RECURSOS SIN EMPAQUETAR: {faltan}")
+          print(f"{len(recursos)} recursos empaquetados: {', '.join(recursos)}")
+          PY
+
+      - name: Empaquetar Linux
+        # `upload-artifact` y las releases no conservan el bit ejecutable, así
+        # que en Linux se sube un tar.gz: descargar el binario suelto deja un
+        # fichero que hay que hacer ejecutable a mano antes de abrirlo.
+        if: runner.os == 'Linux'
+        run: tar -czf dist/AutoML-Desktop-linux-x86_64.tar.gz -C dist AutoML_MEC_Desktop
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AutoML-Desktop-${{ matrix.os }}
-          path: dist/*
+          name: AutoML-Desktop-${{ runner.os }}
+          path: |
+            dist/AutoML_MEC_Desktop.exe
+            dist/AutoML-Desktop-linux-x86_64.tar.gz
           if-no-files-found: error
           retention-days: 14
 
-      - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
+  release:
+    name: Draft release
+    needs: build
+    # Solo con tags: el disparo manual sirve para probar el build, no para
+    # publicar. Y va en un job aparte porque si cada runner de la matriz
+    # creara la release a la vez, competirían por la misma y una fallaría.
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Recoger los artefactos
+        uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+          merge-multiple: true
+
+      - name: Crear el borrador
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            dist/AutoML_MEC_Desktop
-            dist/AutoML_MEC_Desktop.exe
-          generate_release_notes: true
+          # `draft: true` deja la release sin publicar hasta que se revise.
           draft: true
+          generate_release_notes: true
+          files: artefactos/*

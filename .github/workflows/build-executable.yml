@@ -42,9 +42,29 @@ jobs:
           pip install -e .
           pip install pyinstaller
 
+      - name: Instalar librerías de Qt (Linux)
+        # PySide6 enlaza contra libGL, libEGL y libxkbcommon-x11, que un runner
+        # Ubuntu sin escritorio no trae: el import muere con "ImportError:
+        # libGL.so.1: cannot open shared object file". Sin esto también falla
+        # el propio PyInstaller, que importa PySide6 para localizar sus plugins.
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon-x11-0 libdbus-1-3 libfontconfig1 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-xinerama0 libxcb-randr0 libxcb-render-util0 libxcb-xfixes0
+
       - name: Comprobar que el código importa
         # Falla aquí, en segundos, y no diez minutos después dentro del binario.
-        run: python -c "import main, ui.theme, core.model_specs"
+        # Van en invocaciones separadas para que el log diga cuál falla en vez
+        # de una traza donde no se sabe qué import reventó.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -c "import core.model_specs; print('core OK')"
+          python -c "import ui.theme; print('ui.theme OK')"
+          python -c "import main; print('main OK')"
 
       - name: Build with PyInstaller
         run: pyinstaller --clean --noconfirm AutoML_MEC_Desktop.spec

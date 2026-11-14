@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (  # noqa: E402
 from core.state import AppState  # noqa: E402
 from ui.layout import ALTURA_TABLA, acotar_tabla, envolver_scroll  # noqa: E402
 from ui.sidebar import ESTADOS, PASOS, StepSidebar  # noqa: E402
+from ui.theme import ORGANIZACION  # noqa: E402
 
 RAIZ = Path(__file__).resolve().parent.parent
 NOMBRES_PESTANA = (
@@ -324,11 +325,14 @@ def test_el_escudo_esta_centrado_en_la_barra(app):
 
 
 def test_el_texto_de_la_organizacion_no_se_duplica(app):
-    """«Ministerio de Educación Superior — Cuba» vive solo en el pie."""
+    """El nombre de la organización aparece una sola vez, en el pie.
+
+    Se compara contra `theme.ORGANIZACION` y no contra un texto copiado: el
+    nombre ya cambió una vez y el test se quedó esperando el anterior.
+    """
     lateral = StepSidebar()
-    textos = [w.text() for w in lateral.findChildren(QLabel)]
-    assert "Ministerio de Educación Superior — Cuba" in textos
-    assert "Ministerio de Educación Superior" not in textos
+    textos = [w.text() for w in lateral.findChildren(QLabel) if w.text()]
+    assert textos.count(ORGANIZACION) == 1
 
 
 # ----------------------------------------------------------------------

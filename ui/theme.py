@@ -79,7 +79,7 @@ NOMBRE_APP = "AutoML Desktop"
 #: Versión mostrada por la aplicación. La fuente de verdad es el `version` de
 #: `pyproject.toml`: `tests/test_theme.py` comprueba que las dos coinciden, y el
 #: `.spec` de PyInstaller lee la misma, así que hay una sola cifra que tocar.
-VERSION_APP = "1.0.0"
+VERSION_APP = "1.0.2"
 ORGANIZACION = "Ministerio de Educación de la República de Cuba"
 
 

@@ -12,7 +12,7 @@ modelos de Machine Learning **sin que el usuario necesite escribir código**.
 Azul, rojo y blanco: los colores del Ministerio de Educación de la República
 de Cuba, tomados del sitio institucional del proyecto ERCE. El escudo va en la barra lateral y como icono de la aplicación.
 
-| | | |
+| | | |el
 |---|---|---|
 | `marino` `#12223b` | `azul_med` `#14448c` | `lateral` `#ffffff` |
 | `acento` `#d34223` | `oro` `#81660d` | `fondo` `#f3f4f7` |
@@ -218,16 +218,47 @@ de machine learning debe poder probarse sin instanciar Qt.
 
 ## Requisitos
 
-- Python **3.10 o superior**
-- Sistema operativo: Linux, macOS o Windows
+### Para usar el programa compilado
+
+El ejecutable lleva dentro el intérprete de Python y todas sus dependencias,
+así que **no hace falta instalar Python**.
+
+| Sistema | Qué necesita |
+|---------|--------------|
+| Windows 10 u 11 (64 bits) | Nada |
+| CachyOS | Nada |
+| Lubuntu 22.04 o superior | Nada en una instalación de escritorio |
+
+En Lubuntu, solo si se ejecuta sobre una instalación mínima o de servidor,
+hacen falta las bibliotecas gráficas de Qt:
+
+```bash
+sudo apt install libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0
+```
+
+Se descarga `AutoML-Desktop-windows-x64.zip` o
+`AutoML-Desktop-linux-x86_64.tar.gz` desde la página de releases.
+
+> **Descomprime la carpeta entera y ejecuta el programa desde dentro.** El
+> paquete usa el modo «carpeta» de PyInstaller: el ejecutable necesita la
+> carpeta `_internal/` que tiene al lado. Sacar el `.exe` de ahí deja un
+> programa que no arranca. A cambio abre en menos de un segundo, porque no
+> tiene que extraer medio gigabyte en cada arranque.
+
+### Para ejecutar desde el código fuente
+
+- Python **3.12** (las dependencias están fijadas para esa versión)
+- Linux, macOS o Windows
 
 ### Dependencias
 
-Las dependencias están declaradas en `pyproject.toml`:
+Las dependencias están declaradas en `pyproject.toml`, con **versiones exactas**
+para que dos compilaciones den el mismo ejecutable. Subirlas es una decisión
+consciente: PySide6 marca el `glibc` mínimo del binario.
 
 ```bash
 pip install -e .            # núcleo + lectura de Excel (openpyxl, xlrd, odfpy)
-pip install -e ".[smote]"   # añade imbalanced-learn para SMOTE
+pip install -e ".[smote]"   # añade imbalanced-learn; lo necesita el ejecutable
 pip install -e ".[dev]"     # añade pytest, black, isort, coverage y xlwt
 ```
 
@@ -249,8 +280,11 @@ git clone https://github.com/sonoAESS/automl-desktop.git
 cd automl-desktop
 python -m venv .venv
 source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[smote]"
 ```
+
+El extra `[smote]` no es opcional si vas a usar el balanceo de clases: sin él,
+elegir SMOTE lanza un `ModuleNotFoundError` en tiempo de ejecución.
 
 ### Ejecución
 

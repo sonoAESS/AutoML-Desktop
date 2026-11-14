@@ -10,7 +10,7 @@ Comprueba dos cosas:
    aplicación necesita (`platforms`, `imageformats`) y que no se hayan colado
    los que el `.spec` elimina. Un recorte de más aquí no da error hasta que
    alguien abre la aplicación.
-2. **Arranque**: que el proceso siga vivo diez segundos después de lanzarlo
+2. **Arranque**: que el proceso siga vivo quince segundos después de lanzarlo
    con la plataforma `offscreen` y que no haya escrito una traza.
 
 La ruta se puede forzar con `AUTOML_BINARY`; si no, se busca el paquete en
@@ -49,9 +49,26 @@ def _interno() -> Path:
     return BINARIO.parent / "_internal"
 
 
+def _dir_qt(nombre: str) -> Path:
+    """Localiza una carpeta de Qt dentro del paquete.
+
+    PyInstaller monta los plugins en `PySide6/Qt/...` en Linux y macOS, pero
+    en `PySide6/...` en Windows: el wheel de PySide6 cambia de raíz según el
+    sistema (`qt_rel_dir` en el hook de PyInstaller). Buscar solo una de las
+    dos rutas deja el test roto en el otro sistema, y peor: en verde sin
+    comprobar nada si se salta con un `return`.
+    """
+    for raiz in (("PySide6", "Qt"), ("PySide6",)):
+        candidato = _interno().joinpath(*raiz, nombre)
+        if candidato.is_dir():
+            return candidato
+    pytest.fail(
+        f"no encuentro «{nombre}» en {_interno()}; ¿cambió el layout de PySide6?"
+    )
+
+
 def test_el_paquete_trae_los_plugins_necesarios():
-    plugins = _interno() / "PySide6" / "Qt" / "plugins"
-    assert plugins.is_dir(), f"no existe {plugins}"
+    plugins = _dir_qt("plugins")
 
     presentes = {p.name for p in plugins.iterdir()}
     for necesario in ("platforms", "imageformats", "iconengines"):
@@ -69,9 +86,7 @@ def test_el_paquete_trae_los_plugins_necesarios():
 
 
 def test_el_paquete_solo_trae_las_traducciones_en_espanol():
-    traducciones = _interno() / "PySide6" / "Qt" / "translations"
-    if not traducciones.is_dir():
-        return
+    traducciones = _dir_qt("translations")
     ajenas = [p.name for p in traducciones.iterdir() if not p.name.endswith("_es.qm")]
     assert not ajenas, f"quedaron traducciones sin usar: {ajenas[:5]}"
 

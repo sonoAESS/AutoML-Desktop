@@ -70,6 +70,7 @@ automl_app/
 ├── tests/
 ├── pyproject.toml
 ├── AGENTS.md
+├── GUIA_DE_USO.md        guía para el usuario final (no técnica)
 └── README.md
 ```
 

@@ -5,6 +5,11 @@ archivo CSV o de Excel, aplicar preprocesamiento y limpieza de datos, y
 entrenar
 modelos de Machine Learning **sin que el usuario necesite escribir código**.
 
+> **¿Solo quieres usar el programa?** La [**Guía de uso**](GUIA_DE_USO.md)
+> explica el flujo completo con tres ejemplos paso a paso
+> (`heart.csv`, `ford.csv` y `Mobiles.csv`). Este README está pensado para
+> quien instala, mantiene o modifica la aplicación.
+
 ---
 
 ## Identidad visual
@@ -208,6 +213,7 @@ automl_app/
 ├── tests/                  # Pruebas unitarias de core/
 ├── pyproject.toml          # Dependencias y configuración
 ├── AGENTS.md               # Guía para agentes y contribuidores
+├── GUIA_DE_USO.md          # Guía paso a paso para el usuario final
 └── README.md
 ```
 
